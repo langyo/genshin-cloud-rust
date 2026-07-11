@@ -1,4 +1,5 @@
 pub mod area;
+pub mod binary_doc;
 pub mod cache;
 pub mod history;
 pub mod icon;

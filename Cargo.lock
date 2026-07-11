@@ -49,11 +49,13 @@ dependencies = [
  "chrono",
  "derive_more 2.1.1",
  "env_logger",
+ "flate2",
  "flume",
  "futures",
  "image",
  "jsonwebtoken",
  "log",
+ "md5",
  "minio",
  "once_cell",
  "oneshot",
@@ -6054,10 +6056,6 @@ dependencies = [
 ]
 
 [[patch.unused]]
-name = "malkuth"
-version = "0.1.0"
-
-[[patch.unused]]
 name = "lagrange-adapter"
 version = "0.1.0"
 
@@ -6082,10 +6080,6 @@ name = "lagrange-server"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "core"
-version = "0.1.0"
-
-[[patch.unused]]
 name = "dev-celestia-plugin"
 version = "0.1.0"
 
@@ -6094,80 +6088,16 @@ name = "dev-celestia-server"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "tairitsu"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-browser"
-version = "0.5.13"
-
-[[patch.unused]]
-name = "tairitsu-browser-fetch"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-browser-test"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-browser-wit-resolver"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-browser-worlds"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-hooks"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-macros"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-mcp"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-packager"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-ssr"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-style"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-vdom"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "tairitsu-web"
-version = "0.5.16"
-
-[[patch.unused]]
-name = "e-celestia-world"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "seia"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "hifumi"
+name = "ichika"
 version = "0.1.1"
 
 [[patch.unused]]
-name = "hifumi-cli"
+name = "ichika-macros"
 version = "0.1.1"
 
 [[patch.unused]]
-name = "hifumi-macros"
-version = "0.1.1"
+name = "aoba"
+version = "0.2.0"
 
 [[patch.unused]]
 name = "align_ext"
@@ -6372,6 +6302,74 @@ version = "0.1.0"
 [[patch.unused]]
 name = "xarray"
 version = "0.1.0"
+
+[[patch.unused]]
+name = "shirabe"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "tairitsu"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-browser"
+version = "0.5.13"
+
+[[patch.unused]]
+name = "tairitsu-browser-fetch"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-browser-test"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-browser-wit-resolver"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-browser-worlds"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-hooks"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-macros"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-mcp"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-packager"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-ssr"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-style"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-vdom"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "tairitsu-web"
+version = "0.5.16"
+
+[[patch.unused]]
+name = "e-celestia-world"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "ratatui-markdown"
+version = "0.3.6"
 
 [[patch.unused]]
 name = "_config"
@@ -6862,36 +6860,76 @@ name = "xarray"
 version = "0.1.0"
 
 [[patch.unused]]
+name = "seia"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "hifumi"
+version = "0.1.1"
+
+[[patch.unused]]
+name = "hifumi-cli"
+version = "0.1.1"
+
+[[patch.unused]]
+name = "hifumi-macros"
+version = "0.1.1"
+
+[[patch.unused]]
+name = "core"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "malkuth"
+version = "0.1.0"
+
+[[patch.unused]]
 name = "libnoa"
 version = "0.3.2"
-
-[[patch.unused]]
-name = "ichika"
-version = "0.1.1"
-
-[[patch.unused]]
-name = "ichika-macros"
-version = "0.1.1"
-
-[[patch.unused]]
-name = "shirabe"
-version = "0.1.0"
 
 [[patch.unused]]
 name = "scriptum"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "evernight-common"
+name = "hikari-animation"
+version = "0.3.10"
+
+[[patch.unused]]
+name = "hikari-builder"
+version = "0.3.10"
+
+[[patch.unused]]
+name = "hikari-components"
+version = "0.3.10"
+
+[[patch.unused]]
+name = "hikari-extra-components"
+version = "0.3.10"
+
+[[patch.unused]]
+name = "hikari-i18n"
+version = "0.3.10"
+
+[[patch.unused]]
+name = "hikari-icons"
+version = "0.3.10"
+
+[[patch.unused]]
+name = "hikari-palette"
+version = "0.3.10"
+
+[[patch.unused]]
+name = "hikari-theme"
+version = "0.3.10"
+
+[[patch.unused]]
+name = "kou"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "evernight-ota"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "shittim-chest-cli"
-version = "0.1.0"
+name = "kirino"
+version = "0.5.0"
 
 [[patch.unused]]
 name = "_config"
@@ -6974,10 +7012,6 @@ name = "arona"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "kirino"
-version = "0.5.0"
-
-[[patch.unused]]
 name = "entelecheia-cli"
 version = "0.2.0"
 
@@ -6986,45 +7020,13 @@ name = "scepter"
 version = "0.2.0"
 
 [[patch.unused]]
-name = "aoba"
-version = "0.2.0"
-
-[[patch.unused]]
-name = "kou"
+name = "evernight-common"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "hikari-animation"
-version = "0.3.10"
+name = "evernight-ota"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "hikari-builder"
-version = "0.3.10"
-
-[[patch.unused]]
-name = "hikari-components"
-version = "0.3.10"
-
-[[patch.unused]]
-name = "hikari-extra-components"
-version = "0.3.10"
-
-[[patch.unused]]
-name = "hikari-i18n"
-version = "0.3.10"
-
-[[patch.unused]]
-name = "hikari-icons"
-version = "0.3.10"
-
-[[patch.unused]]
-name = "hikari-palette"
-version = "0.3.10"
-
-[[patch.unused]]
-name = "hikari-theme"
-version = "0.3.10"
-
-[[patch.unused]]
-name = "ratatui-markdown"
-version = "0.3.6"
+name = "shittim-chest-cli"
+version = "0.1.0"

@@ -49,6 +49,8 @@ yuuka = "^0.6"
 
 image = { version = "^0.25", features = ["gif", "jpeg", "png", "webp"] }
 sqids = "^0.4"
+# flate2 for the BinaryMD5 gzip-compressed archive export (Java uses GZIP, not bzip2).
+flate2 = "^1"
 bzip2 = "^0.6"
 
 bcrypt = "^0.19"
