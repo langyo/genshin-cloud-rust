@@ -1,45 +1,52 @@
 # Java Sync Roadmap
 
-This roadmap tracks the work to bring the Rust backend to feature parity with
-the Java reference implementation
-([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud)).
+This roadmap tracks the port of features from the Java reference backend
+([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud))
+into this Rust rewrite. The Rust and Java sides share the same PostgreSQL
+schema (`genshin_map`), verified by the table-name parity tests in
+`tests/rust/tests/`, so the two backends can run against the same database
+during the migration.
 
 ## Java-side scope
 
-The Java backend (~30 controllers, ~20 entities) covers:
+The Java backend is roughly **~30 controllers** and **~20 entities** across
+two domains, plus three pieces of non-trivial infrastructure:
 
 - **Map content**: area, icon, icon_type, item, item_type, marker,
   marker_link, tag, tag_type, route, notice, history, score.
 - **Binary archive export** (`*_doc` endpoints): large datasets are serialized,
-  compressed, and keyed by MD5 so clients can incrementally sync.
+  bz2-compressed, and keyed by BinaryMD5 so the client can incrementally sync.
+  Two-tier cache on the Java side (Caffeine → port to `moka` / `quick-cache`).
 - **Crowd-sourced punctuate workflow**: user marker submissions → staging
-  table → audit → promotion to live markers.
-- **System**: user, role, device (login anomaly detection), invitation,
+  table → audit → promotion to live markers (three-state approval).
+- **System**: user, role, device (login-anomaly detection), invitation,
   action_log, archive.
-- **Auth**: OAuth2 password-grant JWT with JWKS endpoint, RSA keypair,
+- **Auth**: OAuth2 password-grant JWT with a JWKS endpoint, RSA keypair,
   device/IP anomaly detection on token issuance.
 
 ## Porting priority
 
-| # | Domain / feature | Key entity / concept | Complexity |
-|---|---|---|---|
-| 1 | **area + marker** (reference samples) | `Area`, `Marker`, `hiddenFlag`, `special_flag` | Done — used as the porting template |
-| 2 | icon / icon_type | `Icon`, `IconType`, icon-tag merge | Low |
-| 3 | item / item_type | `Item`, `ItemType`, `selectPageItemByCondition` (the `specialFlag` filter) | Medium |
-| 4 | tag / tag_type | `Tag`, `TagType` | Low |
-| 5 | notice / route / history | `Notice` (validity-sort rule), `Route`, `History` | Low–Medium |
-| 6 | punctuate workflow | `MarkerPunctuate` staging → `Marker` promotion, 3-state audit | High |
-| 7 | scoring | `ScoreStat`, scope/span bucketing, aggregation | High |
-| 8 | system (user/role/device/invitation/action_log) | `SysUser*`, login anomaly detection | Medium |
-| 9 | BinaryMD5 archive export (`*_doc`) | compressed MD5-keyed cache, two-tier Caffeine → port to `moka`/`quick-cache` | High |
-| 10 | OAuth2 / JWKS | RSA keypair, JWT token enhancer, device/IP check | High |
+The order below front-loads the entities that unblock the most downstream
+work. Each step lists the key entity/feature and an estimated complexity.
+
+| # | Area | Key entity / feature | Complexity | Status |
+| --- | --- | --- | --- | --- |
+| 1 | **area + marker** (reference samples) | `Area`, `Marker`, `hiddenFlag`, `specialFlag`. Establishes the `SafeEntityTrait` pattern and the five-layer domain template every later port copies. | Medium | Done — used as the porting template |
+| 2 | **icon / item / tag families** | `Icon`, `IconType`, `IconTypeLink`, `Item`, `ItemType`, `ItemTypeLink`, plus the `Tag` / `TagType` taxonomy. Includes the `selectPageItemByCondition` `specialFlag` filter and the icon-tag merge. | Low–Medium | In progress |
+| 3 | **notice / route / history** | `Notice` (validity-sort rule), `Route`, `History`. Read-heavy content that pairs naturally with the Redis cache layer. | Low–Medium | In progress |
+| 4 | **punctuate workflow + scoring** | `MarkerPunctuate` staging → `Marker` promotion (three-state audit) and `ScoreStat` aggregation (scope/span bucketing). Two-phase state machine plus the score aggregate. | High | Planned |
+| 5 | **system (user / role / device / invitation)** | `SysUser`, `SysUserArchive`, `SysUserDevice` (login-anomaly detection), `SysUserInvitation`, `SysActionLog`, role listing. Depends on the bcrypt hashing already in `utils`. | Medium | In progress |
+| 6 | **BinaryMD5 archive export** | The bz2-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc`. The Rust side currently only *serves* the archives from the MinIO `bz2doc` bucket; porting the producer (and the two-tier cache) is the work. | High | Planned |
+| 7 | **OAuth2 / JWKS** | `/oauth/token` issuance, JWKS publication, the RSA keypair + token enhancer, device/IP anomaly check, and the `qq` registration provider. Depends on `jsonwebtoken` 10 (already pinned). | High | Planned |
 
 ## Notes
 
-- Items 2–5 are low-risk CRUD ports following the
-  [domain-sync template](./domain-sync-template.md).
-- Items 6–10 each carry significant business logic and should get their own
-  design doc under `docs/en/designs/` before implementation.
-- The Rust side already shares the same PostgreSQL schema as the Java side
-  (verified by table-name parity tests), so the two backends can run against
-  the same database during the migration.
+- Steps 1–5 are CRUD-shaped ports that follow the
+  [Domain Sync Template](./domain-sync-template.md); they are low-risk and
+  can land incrementally.
+- Steps 4, 6, and 7 each carry significant business or algorithmic logic
+  (the punctuate state machine, BinaryMD5 hashing + bz2 streaming, JWKS key
+  rotation). Each should get its own design note under `docs/en/designs/`
+  before implementation.
+- Update this table's Status column (and `CHANGELOG.md`) as each domain moves
+  from *Planned* → *In progress* → *Done*.
