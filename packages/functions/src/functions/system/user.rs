@@ -8,7 +8,7 @@ use _database::models::system::sys_user as sys_user_model;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
-    models::Pagination,
+    models::{Pagination, SysUserVO},
     types::{AccessPolicyItemEnum, SystemUserRole},
 };
 
@@ -64,15 +64,13 @@ pub async fn do_register_qq(
     do_register(_auth, access_policy, logo, remark, role_id, username).await
 }
 
-pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<()> {
+pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await?;
     let m = m.ok_or(anyhow!("User not found"))?;
-    // 返回简要用户信息（转换为 VO 在上层路由一般完成），这里只返回 Ok(()) 作为占位
-    let _vo: _utils::models::SysUserVO = m.into();
-    Ok(())
+    Ok(m.into())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -180,8 +178,8 @@ pub async fn do_list(
     role_ids: Option<Vec<SystemUserRole>>,
     sort: Option<Vec<String>>, // 简化为 String
     username: String,
-) -> Result<()> {
-    let _ = (&pagination, &nickname, &role_ids, &sort, &username);
+) -> Result<serde_json::Value> {
+    let _ = &sort; // sort not yet applied (Java uses a Sort enum; placeholder)
     let db = &DB_CONN.wait().pg_conn;
 
     let mut query = sys_user_model::Entity::find_safety();
@@ -202,8 +200,8 @@ pub async fn do_list(
     let total = query.clone().count(db).await?;
     let items = query.limit(size).offset(offset).all(db).await?;
 
-    let _ = serde_json::json!({"total": total, "items": items});
-    Ok(())
+    let vos: Vec<SysUserVO> = items.into_iter().map(Into::into).collect();
+    Ok(serde_json::json!({"total": total, "items": vos}))
 }
 
 pub async fn do_kick_out(_auth: AuthInfo, _work_id: String) -> Result<()> {
