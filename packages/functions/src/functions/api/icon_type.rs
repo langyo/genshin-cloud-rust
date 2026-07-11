@@ -1,17 +1,17 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
-use sea_orm::{prelude::*, ActiveValue::Set};
+use sea_orm::{ActiveValue::Set, prelude::*};
 
-use _database::models::icon::icon_type as icon_type_model;
 use _database::DB_CONN;
+use _database::models::icon::icon_type as icon_type_model;
 use _utils::models::common::EmptyResponse;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
+        IconTypeAddRequest, IconTypeUpdateRequest,
         icon_type::{IconTypeListResponse, IconTypeVO},
         wrapper::CommonResponse,
-        IconTypeAddRequest, IconTypeUpdateRequest,
     },
 };
 

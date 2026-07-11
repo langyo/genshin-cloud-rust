@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter, QuerySelect};
+use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
-use _database::models::system::sys_user as sys_user_model;
 use _database::DB_CONN;
+use _database::models::system::sys_user as sys_user_model;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,

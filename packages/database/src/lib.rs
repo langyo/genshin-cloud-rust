@@ -1,6 +1,6 @@
 pub mod models;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use log::info;
 use minio::s3::types::S3Api;
 use std::{sync::Arc, time::Duration};

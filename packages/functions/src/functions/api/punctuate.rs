@@ -1,21 +1,24 @@
 use anyhow::Result;
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter, QuerySelect};
+use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
-use _database::{models::marker::marker as marker_model, DB_CONN};
+use _database::{DB_CONN, models::marker::marker as marker_model};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
+        marker::{MarkerAddResponse, MarkerEmptyResponse, MarkerListResponse, MarkerVO},
         punctuate::PunctuateData,
-        marker::{MarkerAddResponse, MarkerEmptyResponse, MarkerVO, MarkerListResponse},
         wrapper::{CommonResponse, Pagination},
     },
 };
 
 /// 使用 marker 表作为打点后台实现
-pub async fn do_update(_auth: AuthInfo, payload: PunctuateData) -> Result<CommonResponse<MarkerEmptyResponse>> {
+pub async fn do_update(
+    _auth: AuthInfo,
+    payload: PunctuateData,
+) -> Result<CommonResponse<MarkerEmptyResponse>> {
     // 如果 payload 中带有原有点位 id，则视为更新对应 marker 的额外字段与状态
     if let Some(original_id) = payload.original_marker_id {
         let id = original_id as i64;
@@ -39,7 +42,10 @@ pub async fn do_update(_auth: AuthInfo, payload: PunctuateData) -> Result<Common
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }
 
-pub async fn do_submit(_auth: AuthInfo, payload: PunctuateData) -> Result<CommonResponse<MarkerAddResponse>> {
+pub async fn do_submit(
+    _auth: AuthInfo,
+    payload: PunctuateData,
+) -> Result<CommonResponse<MarkerAddResponse>> {
     let now = Utc::now().naive_utc();
     let active = marker_model::ActiveModel {
         version: Set(0),
@@ -70,7 +76,10 @@ pub async fn do_submit(_auth: AuthInfo, payload: PunctuateData) -> Result<Common
     Ok(CommonResponse::new(Ok(MarkerAddResponse { id: res.id })))
 }
 
-pub async fn do_get_page(_auth: AuthInfo, payload: Pagination) -> Result<CommonResponse<MarkerListResponse>> {
+pub async fn do_get_page(
+    _auth: AuthInfo,
+    payload: Pagination,
+) -> Result<CommonResponse<MarkerListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let size = payload.size.unwrap_or(10) as u64;
@@ -87,7 +96,9 @@ pub async fn do_get_page(_auth: AuthInfo, payload: Pagination) -> Result<CommonR
             version: it.version,
             id: it.id,
             create_time: it.create_time.and_utc().timestamp_millis() as f64,
-            update_time: it.update_time.map(|dt| dt.and_utc().timestamp_millis() as f64),
+            update_time: it
+                .update_time
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
             creator_id: it.creator_id,
             updater_id: it.updater_id,
             del_flag: it.del_flag,
@@ -104,7 +115,10 @@ pub async fn do_get_page(_auth: AuthInfo, payload: Pagination) -> Result<CommonR
             extra: it.extra,
         });
     }
-    Ok(CommonResponse::new(Ok(MarkerListResponse { total: total as usize, items: arr })))
+    Ok(CommonResponse::new(Ok(MarkerListResponse {
+        total: total as usize,
+        items: arr,
+    })))
 }
 
 pub async fn do_get_page_by_author(
@@ -129,7 +143,9 @@ pub async fn do_get_page_by_author(
             version: it.version,
             id: it.id,
             create_time: it.create_time.and_utc().timestamp_millis() as f64,
-            update_time: it.update_time.map(|dt| dt.and_utc().timestamp_millis() as f64),
+            update_time: it
+                .update_time
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
             creator_id: it.creator_id,
             updater_id: it.updater_id,
             del_flag: it.del_flag,
@@ -146,10 +162,16 @@ pub async fn do_get_page_by_author(
             extra: it.extra,
         });
     }
-    Ok(CommonResponse::new(Ok(MarkerListResponse { total: total as usize, items: arr })))
+    Ok(CommonResponse::new(Ok(MarkerListResponse {
+        total: total as usize,
+        items: arr,
+    })))
 }
 
-pub async fn do_push(_auth: AuthInfo, payload: serde_json::Value) -> Result<CommonResponse<MarkerEmptyResponse>> {
+pub async fn do_push(
+    _auth: AuthInfo,
+    payload: serde_json::Value,
+) -> Result<CommonResponse<MarkerEmptyResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
     // 如果 payload 包含明确的 marker id，则更新其 extra（向后兼容）

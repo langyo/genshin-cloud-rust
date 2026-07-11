@@ -4,8 +4,8 @@ use _utils::{
     jwt::AuthInfo,
     models::{
         common::EmptyResponse,
-        route::{RouteAddRequest, RouteSearchRequest, RouteUpdateRequest, RouteEmptyResponse},
-        wrapper::{Pagination, CommonResponse},
+        route::{RouteAddRequest, RouteEmptyResponse, RouteSearchRequest, RouteUpdateRequest},
+        wrapper::{CommonResponse, Pagination},
     },
 };
 
@@ -13,12 +13,18 @@ pub async fn do_add(_auth: AuthInfo, _payload: RouteAddRequest) -> Result<i64> {
     Ok(0)
 }
 
-pub async fn do_update(_auth: AuthInfo, _payload: RouteUpdateRequest) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_update(
+    _auth: AuthInfo,
+    _payload: RouteUpdateRequest,
+) -> Result<CommonResponse<EmptyResponse>> {
     let _ = _payload;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
-pub async fn do_get_page(_auth: AuthInfo, _payload: Pagination) -> Result<CommonResponse<RouteEmptyResponse>> {
+pub async fn do_get_page(
+    _auth: AuthInfo,
+    _payload: Pagination,
+) -> Result<CommonResponse<RouteEmptyResponse>> {
     Ok(CommonResponse::new(Ok(RouteEmptyResponse {})))
 }
 
@@ -29,7 +35,10 @@ pub async fn do_get_search(
     Ok(RouteEmptyResponse {})
 }
 
-pub async fn do_get_list_by_id(_auth: AuthInfo, _payload: Vec<f64>) -> Result<CommonResponse<RouteEmptyResponse>> {
+pub async fn do_get_list_by_id(
+    _auth: AuthInfo,
+    _payload: Vec<f64>,
+) -> Result<CommonResponse<RouteEmptyResponse>> {
     Ok(CommonResponse::new(Ok(RouteEmptyResponse {})))
 }
 

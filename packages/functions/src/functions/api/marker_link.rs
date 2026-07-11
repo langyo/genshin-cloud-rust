@@ -1,8 +1,8 @@
 use anyhow::Result;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter};
+use sea_orm::{ActiveValue::Set, QueryFilter, prelude::*};
 
-use _database::{models::marker::marker_linkage as linkage_model, DB_CONN};
+use _database::{DB_CONN, models::marker::marker_linkage as linkage_model};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,

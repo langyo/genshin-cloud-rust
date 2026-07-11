@@ -1,17 +1,17 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::net::SocketAddr;
 
 use redis::{AsyncTypedCommands, SetOptions};
-use sea_orm::{prelude::*, ActiveValue::Set};
+use sea_orm::{ActiveValue::Set, prelude::*};
 
-use _database::{models, DB_CONN};
+use _database::{DB_CONN, models};
 use _utils::{
     bcrypt::verify_password,
-    jwt::{generate_token, verify_token, Claims, EXPIRED_APPEND_DURATION},
+    jwt::{Claims, EXPIRED_APPEND_DURATION, generate_token, verify_token},
     models::SysUserVO,
     types::{
-        auth::{OauthAnonymousResponse, OauthLoginResponse, OauthScopeType, OauthTokenType},
         SystemActionLogAction,
+        auth::{OauthAnonymousResponse, OauthLoginResponse, OauthScopeType, OauthTokenType},
     },
 };
 

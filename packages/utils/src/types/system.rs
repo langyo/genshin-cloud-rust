@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString};
 
-use sea_orm::{prelude::*, FromJsonQueryResult};
+use sea_orm::{FromJsonQueryResult, prelude::*};
 
 use super::HiddenFlag;
 
@@ -97,10 +97,10 @@ impl SystemUserRole {
         match self {
             SystemUserRole::Admin | SystemUserRole::MapNeigui => {
                 matches!(flag, HiddenFlag::Hidden | HiddenFlag::Spy)
-            }
+            },
             SystemUserRole::MapManager | SystemUserRole::MapPunctuate => {
                 matches!(flag, HiddenFlag::Hidden)
-            }
+            },
             SystemUserRole::MapUser | SystemUserRole::Visitor => false,
         }
     }

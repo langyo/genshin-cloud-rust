@@ -4,3 +4,6 @@
 /target
 
 .env
+
+# ZCode agent local files
+.zcode/

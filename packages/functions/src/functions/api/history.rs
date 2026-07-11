@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use chrono::{TimeZone, Utc};
 
-use sea_orm::{prelude::*, QueryOrder, QuerySelect};
+use sea_orm::{QueryOrder, QuerySelect, prelude::*};
 
-use _database::models::common::history as history_model;
 use _database::DB_CONN;
+use _database::models::common::history as history_model;
 use _utils::db_operations::SafeEntityTrait;
 use _utils::{
     jwt::AuthInfo,
@@ -70,10 +70,10 @@ pub async fn do_get_list(
             match s {
                 _utils::models::history::HistorySort::UpdateTimeAsc => {
                     query = query.order_by_asc(history_model::Column::UpdateTime)
-                }
+                },
                 _utils::models::history::HistorySort::UpdateTimeDesc => {
                     query = query.order_by_desc(history_model::Column::UpdateTime)
-                }
+                },
             }
         }
     } else {

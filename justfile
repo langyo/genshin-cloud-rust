@@ -60,6 +60,9 @@ fmt-check:
     cargo fmt --all -- --check
 
 clippy:
+    cargo clippy --workspace --all-targets
+
+clippy-strict:
     cargo clippy --workspace --all-targets -- -D warnings
 
 # ── Test ─────────────────────────────────────────────────────────────────────

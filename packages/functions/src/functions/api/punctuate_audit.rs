@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter, QuerySelect};
+use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
 use _database::{
-    models::marker::marker as marker_model, models::marker::marker_item_link as mil_model, DB_CONN,
+    DB_CONN, models::marker::marker as marker_model, models::marker::marker_item_link as mil_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,

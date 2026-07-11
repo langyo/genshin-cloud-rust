@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use strum::EnumIter;
 
-use sea_orm::prelude::*;
 use sea_orm::FromJsonQueryResult;
+use sea_orm::prelude::*;
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, EnumIter, DeriveActiveEnum,

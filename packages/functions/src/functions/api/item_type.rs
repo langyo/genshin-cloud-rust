@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter, QuerySelect};
+use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
 use _database::{
-    models::item::item_type as item_type_model, models::item::item_type_link as link_model, DB_CONN,
+    DB_CONN, models::item::item_type as item_type_model, models::item::item_type_link as link_model,
 };
 use _utils::models::common::EmptyResponse;
 use _utils::{

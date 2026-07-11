@@ -1,15 +1,15 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
-use sea_orm::{prelude::*, ActiveValue::Set};
+use sea_orm::{ActiveValue::Set, prelude::*};
 
-use _database::{models::area::area as area_model, DB_CONN};
+use _database::{DB_CONN, models::area::area as area_model};
 use _utils::models::common::EmptyResponse;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
-        wrapper::CommonResponse, AreaAddRequest, AreaAddResponse, AreaListRequest,
-        AreaListResponse, AreaSingleResponse, AreaUpdateRequest, AreaVO,
+        AreaAddRequest, AreaAddResponse, AreaListRequest, AreaListResponse, AreaSingleResponse,
+        AreaUpdateRequest, AreaVO, wrapper::CommonResponse,
     },
 };
 

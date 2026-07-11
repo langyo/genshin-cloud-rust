@@ -20,7 +20,7 @@ pub mod score;
 
 use anyhow::Result;
 
-use axum::{middleware::from_extractor, Router};
+use axum::{Router, middleware::from_extractor};
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()

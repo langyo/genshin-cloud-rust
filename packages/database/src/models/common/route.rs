@@ -1,4 +1,4 @@
-use sea_orm::{entity::prelude::*, FromJsonQueryResult};
+use sea_orm::{FromJsonQueryResult, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 
 use _utils::{impl_safe_operation, types::HiddenFlag};

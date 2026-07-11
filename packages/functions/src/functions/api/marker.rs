@@ -1,12 +1,12 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QuerySelect};
+use sea_orm::{ActiveValue::Set, QuerySelect, prelude::*};
 
 use std::collections::HashSet;
 
 use _database::{
-    models::marker::marker as marker_model, models::marker::marker_item_link as mil_model, DB_CONN,
+    DB_CONN, models::marker::marker as marker_model, models::marker::marker_item_link as mil_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -28,8 +28,10 @@ fn model_to_vo(it: marker_model::Model) -> MarkerVO {
     MarkerVO {
         version: it.version,
         id: it.id,
-    create_time: it.create_time.and_utc().timestamp_millis() as f64,
-    update_time: it.update_time.map(|dt| dt.and_utc().timestamp_millis() as f64),
+        create_time: it.create_time.and_utc().timestamp_millis() as f64,
+        update_time: it
+            .update_time
+            .map(|dt| dt.and_utc().timestamp_millis() as f64),
         creator_id: it.creator_id,
         updater_id: it.updater_id,
         del_flag: it.del_flag,
@@ -75,29 +77,29 @@ pub async fn do_tweak(
                             am.content = Set(s.clone());
                         }
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::Title => {
                     if let Some(v) = &tweak.meta.replace {
                         am.marker_title = Set(Some(v.clone()));
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::Position => {
                     if let Some(v) = &tweak.meta.replace {
                         am.position = Set(v.clone());
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::VideoPath => {
                     if let Some(v) = &tweak.meta.replace {
                         am.video_path = Set(Some(v.clone()));
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::RefreshTime => {
                     if let Some(_v) = &tweak.meta.value {
                         if let _utils::models::marker::TweakValue::Integer(i) = _v {
                             am.refresh_time = Set(*i);
                         }
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::Extra => {
                     if let Some(map) = &tweak.meta.map {
                         // 用序列化后的 map 完整替换 extra
@@ -107,11 +109,11 @@ pub async fn do_tweak(
                         match _val {
                             _utils::models::marker::TweakValue::AnythingMap(m) => {
                                 am.extra = Set(Some(serde_json::to_value(m)?));
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         }
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::HiddenFlag => {
                     if let Some(_val) = &tweak.meta.value {
                         if let _utils::models::marker::TweakValue::Integer(i) = _val {
@@ -126,10 +128,10 @@ pub async fn do_tweak(
                             am.hidden_flag = Set(hf);
                         }
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::ItemList => {
                     // 逻辑复杂：此处跳过。Item 列表调整应由专门的 API 处理。
-                }
+                },
             }
         }
 
