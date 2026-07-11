@@ -16,6 +16,8 @@
 
 | 文档 | 说明 |
 | --- | --- |
+| [详细 README](./guides/README.md) | 项目概述、技术栈、快速开始 |
+| [领域术语表](./guides/glossary.md) | 中英文领域术语对照 |
 | [架构概览](./guides/architecture.md) | 四包分层、请求流、`SafeEntityTrait`（乐观锁 + 软删除）与缓存集成点 |
 | [构建指南](./guides/building.md) | 前置工具链、`just` 命令、`.env`、本地 `docker-compose` 与 CI |
 | [API 参考](./guides/api-reference.md) | router 暴露的全部 API 域，按用途分组 |
@@ -27,9 +29,12 @@
 
 | 文档 | 说明 |
 | --- | --- |
-| （待补充） | 设计决策记录（ADR）将随移植推进逐步补充 |
+| - [打点审批工作流](./designs/punctuate-workflow.md)
 
-设计文档目前为空。后续将记录 `rustls+ring` 加密后端选型、`sea-orm` 1.x→2.x
+- [BinaryMD5 归档导出](./designs/binarymd5-archive-export.md)
+- [隐藏与特殊标记](./designs/hidden-and-special-flags.md) | 设计决策记录（ADR）将随移植推进逐步补充 |
+
+以下设计文档已编写完成。后续将记录 `rustls+ring` 加密后端选型、`sea-orm` 1.x→2.x
 迁移、`SafeEntityTrait` 宏重写等关键决策。
 
 ## 快速入口

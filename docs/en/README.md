@@ -26,6 +26,8 @@ guides when you start contributing.
 
 | Guide | What it covers |
 | --- | --- |
+| [Detailed README](./guides/README.md) | Project overview, tech stack, quick start |
+| [Glossary](./guides/glossary.md) | Chinese-English domain terminology |
 | [Architecture](./guides/architecture.md) | The four-package layering, request flow from axum to PostgreSQL, the `SafeEntityTrait` pattern, and Redis/MinIO integration points. |
 | [Building](./guides/building.md) | Prerequisites, `just init` / `just build` / `just dev`, the `.env` file, the local docker-compose stack, and the CI workflows. |
 | [API Reference](./guides/api-reference.md) | The API domains the router exposes (area, icon, item, marker, notice, punctuate, score, system, ...), grouped by purpose. |
@@ -39,7 +41,9 @@ Design notes capture the "why" behind non-obvious decisions. This section is
 seeded alongside the guides above; deeper ADR-style documents will be added as
 the port progresses.
 
-- (designs to be added as the port lands each major area)
+- - [Punctuate Workflow](./designs/punctuate-workflow.md)
+- [BinaryMD5 Archive Export](./designs/binarymd5-archive-export.md)
+- [Hidden and Special Flags](./designs/hidden-and-special-flags.md)
 
 ---
 

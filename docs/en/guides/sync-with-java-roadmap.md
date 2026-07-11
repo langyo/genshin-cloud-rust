@@ -18,7 +18,7 @@ two domains, plus three pieces of non-trivial infrastructure:
 
 - **Binary archive export** (`*_doc` endpoints): large datasets are serialized,
 
-bz2-compressed, and keyed by BinaryMD5 so the client can incrementally sync.
+GZIP-compressed, and keyed by BinaryMD5 so the client can incrementally sync.
 Two-tier cache on the Java side (Caffeine → port to `moka` / `quick-cache`).
 
 - **Crowd-sourced punctuate workflow**: user marker submissions → staging
@@ -45,7 +45,7 @@ work. Each step lists the key entity/feature and an estimated complexity.
 | 3 | **notice / route / history** | `Notice` (validity-sort rule), `Route`, `History`. Read-heavy content that pairs naturally with the Redis cache layer. | Low–Medium | In progress |
 | 4 | **punctuate workflow + scoring** | `MarkerPunctuate` staging → `Marker` promotion (three-state audit) and `ScoreStat` aggregation (scope/span bucketing). Two-phase state machine plus the score aggregate. | High | Planned |
 | 5 | **system (user / role / device / invitation)** | `SysUser`, `SysUserArchive`, `SysUserDevice` (login-anomaly detection), `SysUserInvitation`, `SysActionLog`, role listing. Depends on the bcrypt hashing already in `utils`. | Medium | In progress |
-| 6 | **BinaryMD5 archive export** | The bz2-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc`. The Rust side currently only *serves* the archives from the MinIO `bz2doc` bucket; porting the producer (and the two-tier cache) is the work. | High | Planned |
+| 6 | **BinaryMD5 archive export** | The GZIP-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc`. The Rust side currently only *serves* the archives from the MinIO `bz2doc` bucket; porting the producer (and the two-tier cache) is the work. | High | Planned |
 | 7 | **OAuth2 / JWKS** | `/oauth/token` issuance, JWKS publication, the RSA keypair + token enhancer, device/IP anomaly check, and the `qq` registration provider. Depends on `jsonwebtoken` 10 (already pinned). | High | Planned |
 
 ## Notes
@@ -57,7 +57,7 @@ can land incrementally.
 
 - Steps 4, 6, and 7 each carry significant business or algorithmic logic
 
-(the punctuate state machine, BinaryMD5 hashing + bz2 streaming, JWKS key
+(the punctuate state machine, BinaryMD5 hashing + GZIP streaming, JWKS key
 rotation). Each should get its own design note under `docs/en/designs/`
 before implementation.
 
