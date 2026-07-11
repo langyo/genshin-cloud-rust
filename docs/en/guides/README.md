@@ -48,7 +48,7 @@ DB_PASSWORD=genshin_map
 
 ## Workspace layout
 
-```
+```text
 packages/
   utils/      # shared utilities, DTO/VO types, SafeEntityTrait, jwt/bcrypt
   database/   # sea-orm entities + the DB_CONN (Postgres + Redis + MinIO) map

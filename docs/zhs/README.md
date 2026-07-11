@@ -15,7 +15,7 @@
 ## 指南 / Guides
 
 | 文档 | 说明 |
-|---|---|
+| --- | --- |
 | [架构概览](./guides/architecture.md) | 四包分层、请求流、`SafeEntityTrait`（乐观锁 + 软删除）与缓存集成点 |
 | [构建指南](./guides/building.md) | 前置工具链、`just` 命令、`.env`、本地 `docker-compose` 与 CI |
 | [API 参考](./guides/api-reference.md) | router 暴露的全部 API 域，按用途分组 |
@@ -26,7 +26,7 @@
 ## 设计文档 / Designs
 
 | 文档 | 说明 |
-|---|---|
+| --- | --- |
 | （待补充） | 设计决策记录（ADR）将随移植推进逐步补充 |
 
 设计文档目前为空。后续将记录 `rustls+ring` 加密后端选型、`sea-orm` 1.x→2.x

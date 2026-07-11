@@ -8,7 +8,7 @@
 ## 五层模式
 
 | 层 | 位置 | 内容 |
-|---|---|---|
+| --- | --- | --- |
 | 1. 实体 | `packages/database/src/models/<domain>/` | sea-orm `Entity`/`Model`/`Column`，套用 `impl_safe_operation!` |
 | 2. DTO/VO | `packages/utils/src/types/` 与 `src/models/` | 请求/响应结构（`XxxListRequest`、`XxxVO`、`CommonResponse`） |
 | 3. 业务 | `packages/functions/src/functions/api/<domain>.rs` | `do_list` / `do_get` / `do_add` / `do_update` 等异步函数 |
@@ -20,8 +20,8 @@
 **第 1 层 · 实体** `packages/database/src/models/area/area.rs`：
 
 ```rust
-#[derive(Clone, Debug, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "area", schema_name = "genshin_map")]
+# [derive(Clone, Debug, DeriveEntityModel, Deserialize, Serialize)]
+# [sea_orm(table_name = "area", schema_name = "genshin_map")]
 pub struct Model {
     pub version: i64,                       // 乐观锁
     #[sea_orm(primary_key)] pub id: i64,

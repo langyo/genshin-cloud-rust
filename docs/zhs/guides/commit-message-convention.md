@@ -17,7 +17,7 @@
 
 示例：
 
-```
+```text
 ✨ Add area list endpoint.
 🐛 Fix marker soft-delete filter.
 ⬆️ Bump sea-orm to 1.1.
@@ -26,7 +26,7 @@
 ## 常用 gitmoji
 
 | Emoji | 含义 |
-|---|---|
+| --- | --- |
 | ✨ | 新功能（feature） |
 | 🐛 | 修复 bug |
 | 📝 | 文档 |

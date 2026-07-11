@@ -13,7 +13,7 @@ functions → router` 自底向上分层，逐层单向依赖。
 ## 技术栈
 
 | 层 | 技术 |
-|---|---|
+| --- | --- |
 | Web 框架 | `axum` 0.8（含 `macros`、`multipart`、`ws`） |
 | ORM | `sea-orm` 1.x（PostgreSQL，经 `sqlx`，`runtime-tokio-rustls`） |
 | 缓存 | `redis` 1.x |
@@ -43,7 +43,7 @@ just ci            # fmt-check + clippy + check + test（CI 等价）
 
 ## 工作区结构
 
-```
+```text
 packages/
   utils/      通用工具、DTO/VO、SafeEntityTrait 宏
   database/   sea-orm 实体（按域组织于 src/models/<domain>/）

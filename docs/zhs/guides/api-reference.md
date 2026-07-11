@@ -10,7 +10,7 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 ## 地图内容域
 
 | 域 | 路径前缀 | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | area | `/area` | 地区树（含父子关系、末端标记、权限屏蔽） |
 | icon | `/icon` | 地图图标资源及其元数据 |
 | icon_type | `/iconType` | 图标分类 |
@@ -27,7 +27,7 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 ## 归档与文档导出
 
 | 域 | 路径前缀 | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | item_doc | `/itemDoc` | 条目分页导出（bin 二进制 / md5 校验） |
 | marker_doc | `/markerDoc` | 打点分页导出（bin / md5） |
 | marker_link_doc | `/markerLinkDoc` | 打点关联导出 |
@@ -38,7 +38,7 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 ## 打点审批与评分
 
 | 域 | 路径前缀 | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | punctuate | `/punctuate` | 用户提交打点（actions / get / manage） |
 | punctuate_audit | `/punctuateAudit` | 打点审批流（audit / delete / get） |
 | score | `/score` | 评分数据与生成 |
@@ -48,7 +48,7 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 挂在 `/system` 下（`router/src/routes/system/`）：
 
 | 域 | 说明 |
-|---|---|
+| --- | --- |
 | user | 用户管理 |
 | role | 角色与权限 |
 | device | 设备登记 |

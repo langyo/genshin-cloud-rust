@@ -12,17 +12,26 @@ during the migration.
 The Java backend is roughly **~30 controllers** and **~20 entities** across
 two domains, plus three pieces of non-trivial infrastructure:
 
-- **Map content**: area, icon, icon_type, item, item_type, marker,
-  marker_link, tag, tag_type, route, notice, history, score.
+- **Map content**: area, icon, `icon_type`, item, `item_type`, marker,
+
+`marker_link`, tag, `tag_type`, route, notice, history, score.
+
 - **Binary archive export** (`*_doc` endpoints): large datasets are serialized,
-  bz2-compressed, and keyed by BinaryMD5 so the client can incrementally sync.
-  Two-tier cache on the Java side (Caffeine → port to `moka` / `quick-cache`).
+
+bz2-compressed, and keyed by BinaryMD5 so the client can incrementally sync.
+Two-tier cache on the Java side (Caffeine → port to `moka` / `quick-cache`).
+
 - **Crowd-sourced punctuate workflow**: user marker submissions → staging
-  table → audit → promotion to live markers (three-state approval).
+
+table → audit → promotion to live markers (three-state approval).
+
 - **System**: user, role, device (login-anomaly detection), invitation,
-  action_log, archive.
+
+`action_log`, archive.
+
 - **Auth**: OAuth2 password-grant JWT with a JWKS endpoint, RSA keypair,
-  device/IP anomaly detection on token issuance.
+
+device/IP anomaly detection on token issuance.
 
 ## Porting priority
 
@@ -42,11 +51,16 @@ work. Each step lists the key entity/feature and an estimated complexity.
 ## Notes
 
 - Steps 1–5 are CRUD-shaped ports that follow the
-  [Domain Sync Template](./domain-sync-template.md); they are low-risk and
-  can land incrementally.
+
+[Domain Sync Template](./domain-sync-template.md); they are low-risk and
+can land incrementally.
+
 - Steps 4, 6, and 7 each carry significant business or algorithmic logic
-  (the punctuate state machine, BinaryMD5 hashing + bz2 streaming, JWKS key
-  rotation). Each should get its own design note under `docs/en/designs/`
-  before implementation.
+
+(the punctuate state machine, BinaryMD5 hashing + bz2 streaming, JWKS key
+rotation). Each should get its own design note under `docs/en/designs/`
+before implementation.
+
 - Update this table's Status column (and `CHANGELOG.md`) as each domain moves
-  from *Planned* → *In progress* → *Done*.
+
+from *Planned* → *In progress* → *Done*.

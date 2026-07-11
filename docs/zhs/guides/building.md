@@ -5,7 +5,9 @@
 ## 前置条件
 
 - **Rust 工具链**：由仓库根 `rust-toolchain.toml` 锁定为 `stable`，并自带
-  `rustfmt`、`clippy` 组件。首次进入仓库时 `rustup` 会自动安装。
+
+`rustfmt`、`clippy` 组件。首次进入仓库时 `rustup` 会自动安装。
+
 - **[`just`](https://github.com/casey/just)**：所有构建/测试/钩子命令的统一入口。
 - **Docker**（仅本地调试需要）：用于一键拉起 Postgres、Redis、MinIO。
 - **`celestia-devtools`**：提交规范与缓存守护工具，由 `just init` 引导安装。
@@ -45,7 +47,7 @@ DB_PASSWORD=genshin_map
 仓库根目录的 `dev.compose.yml`（**仅用于本地，非生产**）一键启动三个服务：
 
 | 服务 | 端口 | 凭据 |
-|---|---|---|
+| --- | --- | --- |
 | Postgres | 5432 | 用户/密码/库名均为 `genshin_map` |
 | Redis | 6379 | 无密码 |
 | MinIO | 9000（S3）/ 9001（控制台） | `genshin_cloud` / `genshin_cloud` |

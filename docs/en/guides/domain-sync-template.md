@@ -20,8 +20,8 @@ content entities — `hidden_flag` (data-level filtering). Register the module
 in `packages/database/src/models/<domain>/mod.rs` and the parent `mod.rs`.
 
 ```rust
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "area", schema_name = "genshin_map")]
+# [derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
+# [sea_orm(table_name = "area", schema_name = "genshin_map")]
 pub struct Model {
     pub version: i64,
     #[sea_orm(primary_key)]
@@ -52,15 +52,15 @@ contract (`#[serde(rename_all = "camelCase")]`). Add the module to
 update request around the base request without repeating fields.
 
 ```rust
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+# [derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+# [serde(rename_all = "camelCase")]
 pub struct AreaListRequest {
     pub parent_id: Option<i64>,
     pub is_traverse: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+# [derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+# [serde(rename_all = "camelCase")]
 pub struct AreaUpdateRequest {
     pub id: i64,
     pub version: i64,
@@ -137,7 +137,7 @@ assertions and need no database connection. Add DB-backed integration tests
 under `#[ignore]` once the docker-compose harness is wired up.
 
 ```rust
-#[test]
+# [test]
 fn area_entity_table_name_matches_java() {
     assert_eq!(Entity.table_name(), "area");
 }
@@ -148,7 +148,9 @@ fn area_entity_table_name_matches_java() {
 - [ ] Entity matches the Java table name + schema (`genshin_map`)
 - [ ] `version`, `del_flag`, `hidden_flag` columns present
 - [ ] `impl_safe_operation!` invoked (generates `find_safety` /
-      `update_safety` / `delete_safety`)
+
+`update_safety` / `delete_safety`)
+
 - [ ] DTO/VO fields are `camelCase` (Java parity)
 - [ ] `do_list` supports `hidden_flag` filtering where the Java side does
 - [ ] Route handlers registered in the parent `routes/api/mod.rs`

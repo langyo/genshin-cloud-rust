@@ -9,7 +9,7 @@ that guards every write, and where Redis and MinIO plug in.
 The workspace is a strict, four-layer dependency chain. Each crate is
 re-exported under a `_`-prefixed alias so call sites stay readable.
 
-```
+```text
 packages/
   utils/      ── shared utilities, DTO/VO types, SafeEntityTrait, jwt, bcrypt
   database/   ── sea-orm entities; depends on utils
@@ -32,7 +32,7 @@ testable without spinning up an HTTP server — the per-domain smoke tests in
 
 A request traverses the stack top-to-bottom, then the response bubbles back up.
 
-```
+```text
 HTTP request
    │
    ▼
@@ -73,9 +73,10 @@ columns:
 
 - `version: i64` — optimistic-lock counter, incremented on every update.
 - `del_flag: bool` — soft-delete flag. Hard deletes are **rejected at the
-  sea-orm layer**: `before_save`/`before_delete` in the `impl_safe_operation!`
-  macro raises `DbErr` on any hard delete, so "delete" always means
-  `del_flag = true`.
+
+sea-orm layer**: `before_save`/`before_delete` in the `impl_safe_operation!`
+macro raises `DbErr` on any hard delete, so "delete" always means
+`del_flag = true`.
 
 The macro (in `packages/utils/src/db_operations.rs`) generates a
 `SafeEntityTrait` impl that exposes `find_safety()`, `find_safety_by_id(id)`,
@@ -83,10 +84,12 @@ The macro (in `packages/utils/src/db_operations.rs`) generates a
 The "safety" variants:
 
 1. `find_safety*` automatically appends `WHERE del_flag = false`.
-2. `update_safety` re-reads the current `version`, increments it, and adds
-   `WHERE version = <old>` — a lost update silently updates zero rows instead
-   of clobbering data.
-3. `delete_safety` flips `del_flag` to `true` (an `UPDATE`, not a `DELETE`).
+1. `update_safety` re-reads the current `version`, increments it, and adds
+
+`WHERE version = <old>` — a lost update silently updates zero rows instead
+of clobbering data.
+
+1. `delete_safety` flips `del_flag` to `true` (an `UPDATE`, not a `DELETE`).
 
 This is the Rust equivalent of the Java `SafeSqlOperator` / mybatis-plus
 optimistic-lock interceptor; business code in `functions/` should **never**
@@ -98,14 +101,17 @@ Both are provisioned in `database::init_db_conn()` and live on the same
 `DatabaseConnectionMap` as the Postgres connection:
 
 - **Redis** (`redis_conn`) — hot cache for the read-heavy front-end APIs.
-  The `cache` domain (`routes/api/cache/`) serves precomputed area, item,
-  icon-tag, marker, marker-link, and notice snapshots straight from Redis so
-  the map client can bootstrap without hitting PostgreSQL.
+
+The `cache` domain (`routes/api/cache/`) serves precomputed area, item,
+icon-tag, marker, marker-link, and notice snapshots straight from Redis so
+the map client can bootstrap without hitting PostgreSQL.
+
 - **MinIO** (`minio_conn`) — S3-compatible object storage. On startup the
-  `images` and `bz2doc` buckets are created (if missing) with a public
-  `s3:GetObject` policy. The `bz2doc` bucket holds the BinaryMD5 compressed
-  archive exports served by the `*_doc` domains (`item_doc`, `marker_doc`,
-  `marker_link_doc`); `images` holds uploaded icons and assets.
+
+`images` and `bz2doc` buckets are created (if missing) with a public
+`s3:GetObject` policy. The `bz2doc` bucket holds the BinaryMD5 compressed
+archive exports served by the `*_doc` domains (`item_doc`, `marker_doc`,
+`marker_link_doc`); `images` holds uploaded icons and assets.
 
 The default local endpoints are `localhost:5432` (Postgres), `localhost:6379`
 (Redis), and `http://localhost:9000` (MinIO) — see `dev.compose.yml` for the

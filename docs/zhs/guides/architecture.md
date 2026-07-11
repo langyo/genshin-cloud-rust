@@ -9,7 +9,7 @@
 ## 四包分层
 
 | 包 | 职责 | 关键内容 |
-|---|---|---|
+| --- | --- | --- |
 | `utils` | 通用基础 | DTO/VO 类型（`src/types/`、`src/models/`）、`SafeEntityTrait` 宏、JWT、`CommonResponse` 包装 |
 | `database` | 数据访问 | sea-orm 实体，按域组织于 `src/models/<domain>/`，全局 `DB_CONN` 连接池 |
 | `functions` | 业务逻辑 | `src/functions/api/<domain>.rs` 提供 `do_*` 异步函数，编排实体读写与缓存 |
@@ -17,7 +17,7 @@
 
 ## 请求流
 
-```
+```text
 HTTP 请求
   │
   ▼
@@ -67,8 +67,11 @@ flowchart TD
 ## Redis 与 MinIO 集成点
 
 - **Redis**：`packages/functions/src/functions/api/cache.rs` 暴露按域的缓存刷新端点
-  （area、item、marker、icon_tag、notice 等），`router/src/routes/api/cache/`
-  对应路由。热点列表查询优先读缓存、未命中回源并回填。
+
+（area、item、marker、`icon_tag`、notice 等），`router/src/routes/api/cache/`
+对应路由。热点列表查询优先读缓存、未命中回源并回填。
+
 - **MinIO**：`router/src/routes/api/res/upload.rs` 处理资源上传；`item_doc` /
-  `marker_doc` 的 `list_page_bin` / `list_page_md5` 端点用于归档导出（对应 Java
-  侧 BinaryMD5 压缩归档）。
+
+`marker_doc` 的 `list_page_bin` / `list_page_md5` 端点用于归档导出（对应 Java
+侧 BinaryMD5 压缩归档）。

@@ -10,21 +10,26 @@ on push. Commits that fail the check are rejected locally and will fail CI.
 Every commit **subject line** (the first line) must satisfy all of:
 
 1. **Start with a gitmoji.** The literal emoji comes first, e.g. `✨`, `🐛`.
-   No `:sparkles:`-style shortcodes — the actual emoji character.
-2. **Be in English.** Subjects in Chinese or any other language are rejected.
-3. **Be capitalized.** The first letter after the gitmoji (and a single
-   space) is uppercase.
-4. **End with a period.** `.` at the end of the subject.
-5. **No Conventional Commits prefixes.** Do **not** use `feat:`, `fix:`,
-   `chore:`, `refactor:` — the gitmoji already encodes the intent. A subject
-   like `feat: add area list` will be rejected.
+
+No `:sparkles:`-style shortcodes — the actual emoji character.
+
+1. **Be in English.** Subjects in Chinese or any other language are rejected.
+1. **Be capitalized.** The first letter after the gitmoji (and a single
+
+space) is uppercase.
+
+1. **End with a period.** `.` at the end of the subject.
+1. **No Conventional Commits prefixes.** Do **not** use `feat:`, `fix:`,
+
+`chore:`, `refactor:` — the gitmoji already encodes the intent. A subject
+like `feat: add area list` will be rejected.
 
 The body (everything after the blank line separating it from the subject) is
 free-form and may be any language; only the subject is linted.
 
 ### Examples
 
-```
+```text
 ✨ Add the area list endpoint.
 🐛 Fix optimistic-lock version bump on soft delete.
 📝 Document the SafeEntityTrait pattern.
@@ -34,7 +39,7 @@ free-form and may be any language; only the subject is linted.
 
 Bad subjects (will be rejected):
 
-```
+```text
 feat: add area list            ← Conventional Commits prefix, no gitmoji, no period
 ✨ add area list               ← not capitalized, no period
 新增地区列表接口。               ← not English, no gitmoji

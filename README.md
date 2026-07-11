@@ -34,7 +34,7 @@ while improving performance, deployment ergonomics, and type safety.
 ## 技术栈 / Tech Stack
 
 | 层 / Layer | 技术 / Technology |
-|---|---|
+| --- | --- |
 | Web 框架 / Framework | `axum` |
 | ORM | `sea-orm` (PostgreSQL via `sqlx`) |
 | 缓存 / Cache | `redis` |
@@ -73,7 +73,7 @@ just dev           # 实时调试 / real-time debug
 
 ## 工作区结构 / Workspace Layout
 
-```
+```text
 packages/
   utils/      # 通用工具、数据结构 / shared utilities & data structures
   database/   # 数据库实体与连接 / DB entities & connection
@@ -90,7 +90,8 @@ Full architecture, design decisions, and guides live under `docs/`
 
 - **[简体中文文档](./docs/zhs/README.md)** — 架构、构建、API 参考、Java 同步路线图
 - **[English docs](./docs/en/README.md)** — architecture, building, API
-  reference, Java-sync roadmap
+
+reference, Java-sync roadmap
 
 ## 提交规范 / Commit Convention
 
