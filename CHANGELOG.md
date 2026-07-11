@@ -15,31 +15,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Bump cross-major dependencies to their latest stable lines: `reqwest`
   ^0.12 → ^0.13, `redis` ^0.32 → ^1, `axum-extra` ^0.10 → ^0.12,
   `tower-http` ^0.6 → ^0.7, `bcrypt` ^0.17 → ^0.19, `jsonwebtoken` ^9 → ^10,
-  `md5` ^0.7 → ^0.8, `oneshot` ^0.1 → ^0.2, `flume` ^0.11 → ^0.12.
-- **Strip all `aws-*` crates from the dependency graph.** `reqwest` 0.13
-  defaults to the `aws-lc-rs` rustls crypto provider, which forces a native
-  `aws-lc-sys` C build that fails on MSVC. The workspace now pins `rustls`
-  with `default-features = false` and only the `ring` provider; `reqwest`
-  uses `rustls-no-provider` so the single `rustls` workspace dep is the only
-  source of the crypto provider across reqwest + sqlx/sea-orm. Verified: no
-  `aws-` package remains in `cargo tree`.
-- **sea-orm** kept on the ^1 stable line. sea-orm 2.0-rc is available but
-  introduces a breaking `UpdateOne`/`ValidatedUpdateOne` API that requires
-  porting the `SafeEntityTrait` macro
-  (`packages/utils/src/db_operations.rs`) and ~33 business call sites in
-  `packages/functions`. That migration is tracked as dev-branch follow-up
-  work; `strum` stays on ^0.26 (which sea-orm 1.x requires) until then.
-- **minio** kept on ^0.3. minio 0.4 renames `Client` → `MinioClient`/
-  `MinioClientBuilder` and changes the bucket-provisioning builder API;
-  migrating is tracked as follow-up work.
+  `md5` ^0.7 → ^0.8, `oneshot` ^0.1 → ^0.2, `flume` ^0.11 → ^0.12,
+  `strum` ^0.26 → ^0.28.
+- **Strip all `aws-*` crates from the dependency graph.** The workspace now
+  pins `rustls` with `default-features = false` and only the `ring` provider;
+  `reqwest` uses `rustls-no-provider`. Verified: no `aws-` package remains in
+  `cargo tree`.
+- **sea-orm** upgraded to `^2.0.0-rc`. The `SafeEntityTrait` macro and all 33
+  business call sites have been ported to the new `ValidatedUpdateOne` API
+  (`.validate().map(...)` pattern in the macro, `?` before `.exec()` at call
+  sites). `strum` bumped to ^0.28 to match.
+- **minio** upgraded to `^0.4`. `Client` → `MinioClientBuilder`, bucket
+  provisioning uses `.bucket_exists()?.build().send()` + `S3Api` trait.
 
 ### Known technical debt (dev branch)
 
-- `cargo clippy --workspace -- -D warnings` surfaces ~6 pre-existing lints
-  (a deprecated enum variant, a dead `is_available` method, interior-
-  mutability constants in `jwt.rs`, a redundant `Ok?`). These predate the
-  dependency upgrade; fixing them is tracked separately. CI runs clippy
-  without `-D warnings` until they are resolved.
+- `cargo clippy --workspace --all-targets -- -D warnings` passes with zero
+  errors. CI enforces strict clippy.
+- Archive `rename` handler: `auth` is moved by `do_get_last`, preventing
+  `do_rename` from being called (TODO in code). Business functions should be
+  refactored to borrow `&AuthInfo`.
+- Archive `delete_slot`: needs a dedicated `do_delete_slot(user_id, slot_index)`
+  function (TODO in code).
+- Route `do_get_page` / `do_get_search` / `do_get_list_by_id`: queries are
+  correct but results map to `RouteEmptyResponse` placeholder until a
+  `RouteVO` type is defined (TODO in code).
+- BinaryMD5 `*_doc` endpoints: no in-process cache (Java uses Caffeine);
+  each request regenerates. A Redis or moka cache layer should be added.
+- Score `do_generate_score`: simplified aggregation (counts edits per
+  contributor). Java's full field-level diff algorithm (ScoreDataPunctuateVo)
+  is not yet ported.
 
 ### Tooling
 
