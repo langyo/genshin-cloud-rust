@@ -108,10 +108,11 @@ the map client can bootstrap without hitting PostgreSQL.
 
 - **MinIO** (`minio_conn`) — S3-compatible object storage. On startup the
 
-`images` and `bz2doc` buckets are created (if missing) with a public
-`s3:GetObject` policy. The `bz2doc` bucket holds the BinaryMD5 compressed
-archive exports served by the `*_doc` domains (`item_doc`, `marker_doc`,
-`marker_link_doc`); `images` holds uploaded icons and assets.
+`images` bucket is created (if missing) with a public `s3:GetObject` policy
+for serving uploaded icons and assets. The `bz2doc` bucket is provisioned
+for future BinaryMD5 archive storage (currently the `*_doc` endpoints
+generate GZIP-compressed blobs on-the-fly from PostgreSQL rather than
+reading from MinIO).
 
 The default local endpoints are `localhost:5432` (Postgres), `localhost:6379`
 (Redis), and `http://localhost:9000` (MinIO) — see `dev.compose.yml` for the

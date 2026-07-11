@@ -165,10 +165,10 @@ Rust 侧当前**每次都重新生成**——`item_doc.rs:44` 的注释明确写
 ## 6. 与 hidden_flag 的耦合（重要）
 
 切页策略把 `hidden_flag` 当成第一级分组键，意味着**可见性过滤下沉到了归档层**：
-普通玩家客户端根本不会看到 `Hidden`/`Spy`/`Surprise` 组的 MD5（前端按
+普通玩家客户端根本不会看到 `Hidden`/`Spy`/`Suprise` 组的 MD5（前端按
 `userDataLevel` 请求头只拉自己有权的那几组）。这是防剧透和测试服隔离的物理隔离——
 不只是查询时过滤，而是连数据分片都不下发。详见
-[隐藏/特殊标记文档](./hidden-and-special-flags.md#`hidden_flag`-数据级可见性过滤)。
+[隐藏/特殊标记文档](./hidden-and-special-flags.md#2-hidden_flag数据级可见性过滤)。
 
 ## 7. 与 Java 实现的对齐
 

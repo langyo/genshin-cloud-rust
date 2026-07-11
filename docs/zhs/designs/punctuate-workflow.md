@@ -108,7 +108,7 @@ stateDiagram-v2
 三条路径在晋升后**都会硬删除 `marker_punctuate` 记录**（`mp_model::Entity::delete_by_id`）。
 原因：punctuate 表是「待办队列」，晋升成功意味着这次贡献已落地，记录留在队列里
 只会让审核列表越来越长、且无法和正式点位对应。注意这里是硬删 punctuate（它已经
-完成使命），而正式点位走的是软删（`del_flag`，见 [标记文档](./hidden-and-special-flags.md#与软删除-`del_flag`-的正交关系)）——
+完成使命），而正式点位走的是软删（`del_flag`，见 [标记文档](./hidden-and-special-flags.md#41-与软删除-`del_flag`-的正交关系)）——
 两套删除策略分别服务不同目的。
 
 `Modified` 的字段覆盖是「非空才覆盖」的（`punctuate_audit.rs:150` 起对 `picture` /

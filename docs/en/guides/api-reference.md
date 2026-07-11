@@ -27,7 +27,7 @@ authenticated session. The default body limit is 16 MiB.
 
 ## Compressed archive exports — BinaryMD5 bundles
 
-The `*_doc` domains serve bz2-compressed archives the client downloads to
+The `*_doc` domains serve GZIP-compressed archives the client downloads to
 bootstrap offline. The archives are produced on the Java side (BinaryMD5
 hashing) and stored in the MinIO `bz2doc` bucket; the Rust side currently
 serves and will later also produce them.

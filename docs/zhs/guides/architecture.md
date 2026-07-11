@@ -71,7 +71,11 @@ flowchart TD
 （area、item、marker、`icon_tag`、notice 等），`router/src/routes/api/cache/`
 对应路由。热点列表查询优先读缓存、未命中回源并回填。
 
-- **MinIO**：`router/src/routes/api/res/upload.rs` 处理资源上传；`item_doc` /
+- **MinIO**：`router/src/routes/api/res/upload.rs` 处理资源上传（图标、图片等）。
 
-`marker_doc` 的 `list_page_bin` / `list_page_md5` 端点用于归档导出（对应 Java
-侧 BinaryMD5 压缩归档）。
+`bz2doc` 桶已预置，规划中用于 BinaryMD5 归档存储。
+
+- **归档导出（`*_doc`）**：`item_doc` / `marker_doc` / `marker_link_doc` 端点从
+
+PostgreSQL 实时生成 GZIP 压缩的 JSON 数据，以压缩字节的 MD5 为键供客户端
+增量同步（对应 Java 侧 BinaryMD5 压缩归档管线）。

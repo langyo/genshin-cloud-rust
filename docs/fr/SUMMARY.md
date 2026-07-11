@@ -10,6 +10,8 @@
 
 # Guides
 
+- [Detailed README](../en/guides/README.md)
+- [Glossary](../en/guides/glossary.md)
 - [Architecture](../en/guides/architecture.md)
 - [Building](../en/guides/building.md)
 - [API Reference](../en/guides/api-reference.md)
@@ -19,4 +21,7 @@
 
 # Designs
 
-- (to be added)
+- - [Design Index](../en/designs/README.md)
+- [Punctuate Workflow](../en/designs/punctuate-workflow.md)
+- [BinaryMD5 Archive](../en/designs/binarymd5-archive-export.md)
+- [Hidden & Special Flags](../en/designs/hidden-and-special-flags.md)

@@ -154,7 +154,7 @@ the contract turns `0` into an exact-match query for the un-marked set. This
 matches the Java MyBatis query byte-for-byte.
 
 The `area` table carries the same `special_flag` column and follows the same
-contract; `item_type` does as well where the type-system UI needs it.
+contract.
 
 ## Interaction with soft delete
 

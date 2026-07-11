@@ -21,3 +21,8 @@
 - [Punctuate Workflow](./designs/punctuate-workflow.md)
 - [BinaryMD5 Archive Export](./designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](./designs/hidden-and-special-flags.md)
+
+---
+
+语言切换 / Language switcher:
+[English](./README.md) · [简体中文](../zhs/SUMMARY.md) · [繁體中文](../zht/SUMMARY.md)

@@ -16,4 +16,4 @@ feature-synced with the Java reference implementation.
 ---
 
 语言切换 / Language switcher:
-[简体中文](../zhs/README.md) · [English](../en/README.md) · [繁體中文](./README.md) · [日本語](../ja/README.md) · [한국어](../ko/README.md) · [Français](../fr/README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md) · [Deutsch](../de/README.md) · [Português](../pt/README.md)
+[简体中文](../zhs/README.md) · [English](../en/README.md) · [繁體中文](../zht/README.md) · [日本語](../ja/README.md) · [한국어](../ko/README.md) · [Français](../fr/README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md) · [Deutsch](../de/README.md) · [Português](../pt/README.md)

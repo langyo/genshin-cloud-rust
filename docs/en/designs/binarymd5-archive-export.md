@@ -73,7 +73,7 @@ Markers are the largest dataset, so they get the most aggressive paging:
         ├── flag == Visible (0)  ──► split further: page_index = marker.id / 3000
         │                              each page → its own MD5
         │
-        └── flag  ∈ {Hidden, Spy, Surprise}
+        └── flag  ∈ {Hidden, Spy, Suprise}
                                   ──► single page (index 0) → one MD5 for the whole flag
 ```
 

@@ -72,7 +72,7 @@
 ### 2.1 下沉到归档层
 
 `hidden_flag` 不只是查询时过滤，而是**在 BinaryMD5 归档分片时就作为第一级分组键**
-（见 [归档导出文档](./binarymd5-archive-export.md#31-marker点位最复杂)）。`marker_doc`
+（见 [归档导出文档·第 3.1 节](./binarymd5-archive-export.md)）。`marker_doc`
 和 `item_doc` 都按 `hidden_flag` 分组各自压缩成独立的 gzip blob、各自一个 MD5。这意味着
 普通玩家客户端**根本不会收到** `Hidden`/`Spy`/`Suprise` 组的 MD5——不是查询时过滤掉，
 而是数据分片压根不下发。这是比「查询过滤」更强的隔离：哪怕前端有 bug 漏过滤，
