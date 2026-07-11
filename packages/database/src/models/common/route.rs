@@ -41,7 +41,7 @@ pub struct Model {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
-pub struct MarkerListWrapper(Vec<i64>);
+pub struct MarkerListWrapper(pub Vec<i64>);
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
 pub enum Relation {
