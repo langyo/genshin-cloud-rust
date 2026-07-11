@@ -1,95 +1,74 @@
 use anyhow::Result;
+use sea_orm::{QueryFilter, QuerySelect, prelude::*};
 
-use _utils::jwt::AuthInfo;
-use _utils::models::score::{ScoreDataRequest, ScoreGenerateRequest, ScoreResponse, ScoreSample};
-use _utils::models::wrapper::CommonResponse;
+use _database::{DB_CONN, models::common::score_stat as score_stat_model};
+use _utils::{
+    db_operations::SafeEntityTrait,
+    jwt::AuthInfo,
+    models::score::{ScoreDataRequest, ScoreGenerateRequest, ScoreResponse, ScoreSample},
+    models::wrapper::CommonResponse,
+};
 
-fn span_to_seconds(span: &str) -> Option<f64> {
-    match span {
-        "hour" => Some(3600.0),
-        "day" => Some(86400.0),
-        s => s.parse::<f64>().ok(),
-    }
-}
-
-fn deterministic_score(seed: u64) -> f64 {
-    // 基于简单 LCG 的确定性伪随机，映射到 0.0..5.0
-    let mut x = seed.wrapping_add(0x9E3779B97F4A7C15u64);
-    x = x
-        .wrapping_mul(6364136223846793005u64)
-        .wrapping_add(1442695040888963407u64);
-    let v = (x >> 33) as u32 as u64;
-    let scaled = (v % 500) as f64 / 100.0; // 0.00 .. 4.99
-    (scaled * 100.0).round() / 100.0
-}
-
+/// 生成评分统计数据。
+///
+/// Java 侧 `ScoreGenerateService` 是一个复杂的批处理：扫描 punctuate 记录、
+/// 按 scope/span 桶式聚合成 ScoreStat 行写入 score_stat 表。这个批处理管线
+/// 尚未移植；当前返回空结果而不是伪造数据（旧实现用 LCG 随机数伪装真实评分，
+/// 对客户端有误导性）。调用方应先触发 generate（写入 score_stat），再调
+/// do_get_score_data 读取。
 pub async fn do_generate_score(
     _auth: AuthInfo,
-    payload: ScoreGenerateRequest,
+    _payload: ScoreGenerateRequest,
 ) -> Result<CommonResponse<ScoreResponse>> {
-    let start = payload.start_time;
-    let end = payload.end_time;
-    let span_sec = span_to_seconds(&payload.span).unwrap_or(3600.0);
-
-    if end <= start || span_sec <= 0.0 {
-        let payload = ScoreResponse {
-            samples: Vec::new(),
-            average: 0.0,
-        };
-        return Ok(CommonResponse::new(Ok(payload)));
-    }
-
-    let mut samples: Vec<ScoreSample> = Vec::new();
-    let mut sum = 0.0f64;
-
-    // 限制数据点数量以避免 OOM（内存不足）
-    let max_points = 10_000usize;
-    let mut i = 0usize;
-    loop {
-        let t = start + (i as f64) * span_sec;
-        if t > end || samples.len() >= max_points {
-            break;
-        }
-
-        // 种子由 scope 与时间戳派生以保证确定性
-        let mut seed: u64 = payload
-            .scope
-            .bytes()
-            .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
-        seed = seed.wrapping_add(t as u64);
-
-        let score = deterministic_score(seed);
-        sum += score;
-        samples.push(ScoreSample { time: t, score });
-        i += 1;
-    }
-
-    let avg = if samples.is_empty() {
-        0.0
-    } else {
-        sum / (samples.len() as f64)
-    };
-
-    let payload = ScoreResponse {
-        samples,
-        average: (avg * 100.0).round() / 100.0,
-    };
-    Ok(CommonResponse::new(Ok(payload)))
+    // TODO(dev): 移植 Java 的 ScoreGenerateService 批处理（扫描 punctuate →
+    // 按 scope/span 聚合 → 写入 score_stat 表）。当前为空响应。
+    Ok(CommonResponse::new(Ok(ScoreResponse {
+        samples: Vec::new(),
+        average: 0.0,
+    })))
 }
 
+/// 读取评分统计数据——从 score_stat 表查询真实聚合记录。
+///
+/// 按 scope + span + 时间范围过滤，返回每个统计周期的评分样本。
 pub async fn do_get_score_data(
     _auth: AuthInfo,
     payload: ScoreDataRequest,
 ) -> Result<CommonResponse<ScoreResponse>> {
-    // For now, return the same shape as generate; in future this can read cached/aggregated data
-    do_generate_score(
-        _auth,
-        ScoreGenerateRequest {
-            start_time: payload.start_time,
-            end_time: payload.end_time,
-            span: payload.span.clone(),
-            scope: payload.scope.clone(),
-        },
-    )
-    .await
+    let db = &DB_CONN.wait().pg_conn;
+
+    // 将毫秒时间戳转换为 NaiveDateTime 用于查询
+    let start = chrono::DateTime::from_timestamp_millis(payload.start_time as i64)
+        .map(|dt| dt.naive_utc())
+        .unwrap_or_else(|| chrono::NaiveDateTime::MIN);
+    let end = chrono::DateTime::from_timestamp_millis(payload.end_time as i64)
+        .map(|dt| dt.naive_utc())
+        .unwrap_or_else(|| chrono::Utc::now().naive_utc());
+
+    let query = score_stat_model::Entity::find_safety()
+        .filter(score_stat_model::Column::Scope.eq(&payload.scope))
+        .filter(score_stat_model::Column::Span.eq(&payload.span))
+        .filter(score_stat_model::Column::SpanStartTime.gte(start))
+        .filter(score_stat_model::Column::SpanEndTime.lte(end))
+        .limit(10_000);
+
+    let stats = query.all(db).await?;
+
+    let samples: Vec<ScoreSample> = stats
+        .iter()
+        .map(|s| ScoreSample {
+            time: s.span_end_time.and_utc().timestamp_millis() as f64,
+            // score_stat.content 存的是 ScopeStatType 枚举；真实评分值需要从
+            // generate 管线写入后才能填充。当前返回 0.0（占位，非伪造随机数）。
+            score: 0.0,
+        })
+        .collect();
+
+    let average = if samples.is_empty() {
+        0.0
+    } else {
+        samples.iter().map(|s| s.score).sum::<f64>() / samples.len() as f64
+    };
+
+    Ok(CommonResponse::new(Ok(ScoreResponse { samples, average })))
 }
