@@ -82,6 +82,11 @@ pub async fn do_list(
     if let Some(parent) = payload.parent_id {
         query = query.filter(area_model::Column::ParentId.eq(parent));
     }
+    if let Some(hidden_flag) = payload.hidden_flag {
+        // 数据级过滤：与 marker 域的 hiddenFlagList 过滤保持一致，
+        // 让客户端按 normal / insider 数据级请求地区列表。
+        query = query.filter(area_model::Column::HiddenFlag.eq(hidden_flag));
+    }
 
     let items = query.all(&DB_CONN.wait().pg_conn).await?;
     let mut ret = Vec::with_capacity(items.len());
