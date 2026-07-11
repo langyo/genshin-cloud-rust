@@ -122,7 +122,7 @@ pub async fn do_update(
     }
     am.role_id = Set(role_id);
 
-    sys_user_model::Entity::update_safety(am).exec(db).await?;
+    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(())
 }
 
@@ -144,7 +144,7 @@ pub async fn do_update_password(
 
     // 简化：把 old_password 视为新密码并进行哈希后存储
     am.password = Set(_utils::bcrypt::generate_storage_password(old_password)?);
-    sys_user_model::Entity::update_safety(am).exec(db).await?;
+    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(())
 }
 
@@ -160,13 +160,13 @@ pub async fn do_update_password_by_admin(
     let m = m.ok_or(anyhow!("User not found"))?;
     let mut am: sys_user_model::ActiveModel = m.into();
     am.password = Set(_utils::bcrypt::generate_storage_password(password)?);
-    sys_user_model::Entity::update_safety(am).exec(db).await?;
+    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(())
 }
 
 pub async fn do_delete(_auth: AuthInfo, work_id: i64) -> Result<()> {
     // 管理员删除用户：使用软删除 by id
-    sys_user_model::Entity::delete_safety_by_id(work_id)
+    sys_user_model::Entity::delete_safety_by_id(work_id)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(())

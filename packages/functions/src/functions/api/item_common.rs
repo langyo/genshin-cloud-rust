@@ -129,7 +129,7 @@ pub async fn do_update(
         am.default_content = Set(Some(default_content.to_string()));
     }
 
-    item_model::Entity::update_safety(am)
+    item_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
@@ -142,7 +142,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyR
     let item = item.ok_or(anyhow::anyhow!("Item not found"))?;
     let mut am: item_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    item_model::Entity::delete_safety(am)
+    item_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))

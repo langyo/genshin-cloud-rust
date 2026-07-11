@@ -67,7 +67,7 @@ pub async fn do_update(
     am.sort_index = Set(payload.area.sort_index);
     am.special_flag = Set(payload.area.special_flag);
 
-    area_model::Entity::update_safety(am)
+    area_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
@@ -137,7 +137,7 @@ pub async fn do_delete(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<E
     let item = item.ok_or(anyhow!("Area not found"))?;
     let mut am: area_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    area_model::Entity::delete_safety(am)
+    area_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))

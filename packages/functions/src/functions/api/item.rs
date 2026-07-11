@@ -44,7 +44,7 @@ pub async fn do_update(
         }
         am.special_flag = Set(Some(p.special_flag as i32));
 
-        item_model::Entity::update_safety(am)
+        item_model::Entity::update_safety(am)?
             .exec(&DB_CONN.wait().pg_conn)
             .await?;
     }
@@ -121,7 +121,7 @@ pub async fn do_join_type(
         if let Some(link) = ex {
             let mut lam: link_model::ActiveModel = link.into();
             lam.type_id = Set(type_id);
-            link_model::Entity::update_safety(lam)
+            link_model::Entity::update_safety(lam)?
                 .exec(&DB_CONN.wait().pg_conn)
                 .await?;
         } else {
@@ -183,7 +183,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
     let item = item.ok_or(anyhow!("Item not found"))?;
     let mut am: item_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    item_model::Entity::delete_safety(am)
+    item_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(())))

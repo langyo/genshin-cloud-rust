@@ -35,7 +35,7 @@ pub async fn do_update(
                 am.extra = Set(Some(json));
             }
 
-            marker_model::Entity::update_safety(am).exec(db).await?;
+            marker_model::Entity::update_safety(am)?.exec(db).await?;
         }
     }
 
@@ -181,7 +181,7 @@ pub async fn do_push(
             if let Some(extra) = payload.get("extra") {
                 am.extra = Set(Some(extra.clone()));
             }
-            marker_model::Entity::update_safety(am).exec(db).await?;
+            marker_model::Entity::update_safety(am)?.exec(db).await?;
             return Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})));
         }
     }
@@ -220,7 +220,7 @@ pub async fn do_push(
             extra["audit"] = audits;
             am.extra = Set(Some(extra));
 
-            marker_model::Entity::update_safety(am).exec(db).await?;
+            marker_model::Entity::update_safety(am)?.exec(db).await?;
         }
     }
 
@@ -235,7 +235,7 @@ pub async fn do_delete(
 
     // 支持按 id 删除 {"id": i64}
     if let Some(id) = payload.get("id").and_then(|v| v.as_i64()) {
-        marker_model::Entity::delete_safety_by_id(id)
+        marker_model::Entity::delete_safety_by_id(id)?
             .exec(db)
             .await?;
     }

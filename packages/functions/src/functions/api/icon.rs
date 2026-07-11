@@ -115,7 +115,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
     let item = item.ok_or(anyhow!("Icon not found"))?;
     let mut am: icon_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    icon_model::Entity::delete_safety(am)
+    icon_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(())))
@@ -130,7 +130,7 @@ pub async fn do_update(_auth: AuthInfo, payload: IconUpdateRequest) -> Result<Co
     let mut am: icon_model::ActiveModel = item.into();
     am.tag = Set(payload.base.name);
     am.url = Set(payload.base.url);
-    icon_model::Entity::update_safety(am)
+    icon_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(())))

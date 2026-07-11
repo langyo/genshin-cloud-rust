@@ -32,7 +32,7 @@ pub async fn do_update_notice(
     am.title = Set(payload.title);
     am.content = Set(Some(payload.content));
 
-    notice_model::Entity::update_safety(am).exec(db).await?;
+    notice_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -103,7 +103,7 @@ pub async fn do_delete_notice(_auth: AuthInfo, id: i64) -> Result<CommonResponse
     let n = n.ok_or(anyhow!("Notice not found"))?;
     let mut am: notice_model::ActiveModel = n.into();
     am.del_flag = Set(true);
-    notice_model::Entity::delete_safety(am).exec(db).await?;
+    notice_model::Entity::delete_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(())))
 }
 

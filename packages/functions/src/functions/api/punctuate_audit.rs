@@ -210,7 +210,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyR
     let m = m.ok_or(anyhow!("Marker not found"))?;
     let mut am: marker_model::ActiveModel = m.into();
     am.del_flag = Set(true);
-    marker_model::Entity::delete_safety(am).exec(db).await?;
+    marker_model::Entity::delete_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -246,7 +246,7 @@ pub async fn do_pass(
     extra["audit"] = audits;
     am.extra = Set(Some(extra));
 
-    marker_model::Entity::update_safety(am).exec(db).await?;
+    marker_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }
 
@@ -281,6 +281,6 @@ pub async fn do_reject(
     extra["audit"] = audits;
     am.extra = Set(Some(extra));
 
-    marker_model::Entity::update_safety(am).exec(db).await?;
+    marker_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }

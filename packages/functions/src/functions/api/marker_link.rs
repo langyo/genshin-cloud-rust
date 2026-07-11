@@ -36,7 +36,7 @@ pub async fn do_link(
                     am.link_action = Set(action);
                 }
                 am.path = Set(p.path.map(|v| serde_json::to_value(v).ok()).flatten());
-                linkage_model::Entity::update_safety(am)
+                linkage_model::Entity::update_safety(am)?
                     .exec(&DB_CONN.wait().pg_conn)
                     .await?;
                 ret.push(MarkerLinkUpsertResult {
@@ -156,7 +156,7 @@ pub async fn do_delete(
             if let Some(item) = linkage_model::Entity::find_safety_by_id(id).one(db).await? {
                 let mut am: linkage_model::ActiveModel = item.into();
                 am.del_flag = Set(true);
-                linkage_model::Entity::delete_safety(am).exec(db).await?;
+                linkage_model::Entity::delete_safety(am)?.exec(db).await?;
             }
         }
         return Ok(CommonResponse::new(Ok(())));
@@ -171,7 +171,7 @@ pub async fn do_delete(
             for it in items {
                 let mut am: linkage_model::ActiveModel = it.into();
                 am.del_flag = Set(true);
-                linkage_model::Entity::delete_safety(am).exec(db).await?;
+                linkage_model::Entity::delete_safety(am)?.exec(db).await?;
             }
         }
     }

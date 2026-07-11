@@ -136,7 +136,7 @@ pub async fn do_tweak(
         }
 
         // 通过 ActiveModelBehavior 设置 updater 与 update_time；确保携带版本信息
-        marker_model::Entity::update_safety(am).exec(db).await?;
+        marker_model::Entity::update_safety(am)?.exec(db).await?;
     }
 
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
@@ -206,7 +206,7 @@ pub async fn do_update_single(
         am.video_path = Set(Some(video_path));
     }
 
-    marker_model::Entity::update_safety(am).exec(db).await?;
+    marker_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }
 
@@ -338,6 +338,6 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Marker
     let m = m.ok_or(anyhow!("Marker not found"))?;
     let mut am: marker_model::ActiveModel = m.into();
     am.del_flag = Set(true);
-    marker_model::Entity::delete_safety(am).exec(db).await?;
+    marker_model::Entity::delete_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }

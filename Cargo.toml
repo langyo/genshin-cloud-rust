@@ -35,11 +35,9 @@ tokio = { version = "^1", features = ["full"] }
 
 serde = { version = "^1", features = ["derive"] }
 serde_json = "^1"
-# strum 0.27+ requires sea-orm 2.0. While sea-orm 2.0-rc exists, it breaks
-# ~33 business call sites (the SafeEntityTrait macro + all *.exec() consumers).
-# The 2.0 migration is tracked as follow-up work; pin strum to the 0.26 line
-# that sea-orm 1.x supports until the dev branch ports the call sites.
-strum = { version = "^0.26", features = ["derive"] }
+# sea-orm 2.0-rc is now the baseline; strum is bumped to 0.28 to match.
+# Drop the -rc suffix once sea-orm 2.0 goes stable.
+strum = { version = "^0.28", features = ["derive"] }
 uuid = { version = "^1", features = [
   'v4',
   "v7",
@@ -107,12 +105,10 @@ rustls = { version = "^0.23", default-features = false, features = [
 ] }
 tower-http = { version = "^0.7", features = ["fs", "trace"] }
 
-# sea-orm: kept on the 1.x stable line for now. sea-orm 2.0-rc is available
-# but introduces a breaking UpdateOne/ValidatedUpdateOne API that requires
-# porting the SafeEntityTrait macro (packages/utils/src/db_operations.rs) and
-# ~33 business call sites in packages/functions. That migration is scheduled
-# as follow-up work on the dev branch. Move to "^2.0.0-rc" once ported.
-sea-orm = { version = "^1", features = [
+# sea-orm 2.0 release candidate. The SafeEntityTrait macro and all call sites
+# have been ported to the new UpdateOne/ValidatedUpdateOne API. Switch to "^2"
+# once 2.0 stable ships.
+sea-orm = { version = "^2.0.0-rc", features = [
   "debug-print",
   "json-array",
   "sqlx-postgres",

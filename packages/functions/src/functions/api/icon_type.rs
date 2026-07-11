@@ -33,7 +33,7 @@ pub async fn do_update(
     am.is_final = Set(payload.base.is_final);
     // 版本由宏与 update_safety 处理
 
-    icon_type_model::Entity::update_safety(am)
+    icon_type_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
@@ -73,7 +73,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyR
     let item = item.ok_or(anyhow!("Icon type not found"))?;
     let mut am: icon_type_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    icon_type_model::Entity::delete_safety(am)
+    icon_type_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
