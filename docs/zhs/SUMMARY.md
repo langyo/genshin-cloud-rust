@@ -25,4 +25,4 @@
 ---
 
 语言切换 / Language switcher:
-[简体中文](./README.md) · [English](../en/SUMMARY.md) · [繁體中文](../zht/SUMMARY.md)
+[English](../en/SUMMARY.md) · [简体中文](./README.md) · [繁體中文](../zht/SUMMARY.md)
