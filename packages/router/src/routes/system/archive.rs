@@ -140,12 +140,7 @@ pub async fn rename(
     match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
         .await
     {
-        Ok(v) => {
-            let id = v
-                .data
-                .as_ref()
-                .and_then(|d| d.get("id"))
-                .and_then(|i| i.as_i64());
+        Ok(_v) => {
             // auth was moved into do_get_last; do_rename requires an AuthInfo.
             // For now, just return the archive info — full rename needs &AuthInfo refactor.
             // TODO: refactor business functions to borrow AuthInfo.
