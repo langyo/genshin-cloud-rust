@@ -11,7 +11,7 @@ use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 pub struct DatabaseConnectionMap {
     pub pg_conn: DatabaseConnection,
     pub redis_conn: redis::Client,
-    pub minio_conn: minio::s3::Client,
+    pub minio_conn: minio::s3::MinioClient,
 }
 
 use once_cell::sync::OnceCell;
@@ -67,23 +67,27 @@ async fn build_db_map() -> Result<DatabaseConnectionMap> {
 
     // MinIO
     let minio_conn = {
-        let client = minio::s3::Client::new(
+        // minio 0.4: Client → MinioClientBuilder, then .provider().build().
+        let client = minio::s3::MinioClientBuilder::new(
             std::env::var("MINIO_BASE_URL")
                 .unwrap_or("http://localhost:9000".into())
                 .parse()?,
-            Some(Box::new(minio::s3::creds::StaticProvider::new(
-                &std::env::var("MINIO_ACCESS_KEY").context("MINIO_ACCESS_KEY must be set")?,
-                &std::env::var("MINIO_SECRET_KEY").context("MINIO_SECRET_KEY must be set")?,
-                None,
-            ))),
+        )
+        .provider(Some(minio::s3::creds::StaticProvider::new(
+            &std::env::var("MINIO_ACCESS_KEY").context("MINIO_ACCESS_KEY must be set")?,
+            &std::env::var("MINIO_SECRET_KEY").context("MINIO_SECRET_KEY must be set")?,
             None,
-            None,
-        )?;
+        )))
+        .build()?;
 
-        // Ensure buckets exist and set policy
+        // Ensure buckets exist and set policy.
+        // minio 0.4: bucket_exists/create_bucket/put_bucket_policy return
+        // Result<Builder, ValidationErr>; call .build() to get the request
+        // type, then S3Api::send().await to execute.
         for bucket in ["images", "bz2doc"] {
-            if !client.bucket_exists(bucket).send().await?.exists {
-                client.create_bucket(bucket).send().await?;
+            let exists = client.bucket_exists(bucket)?.build().send().await?.exists();
+            if !exists {
+                client.create_bucket(bucket)?.build().send().await?;
                 let config = serde_json::json!({
                     "Version": "2012-10-17",
                     "Statement": [
@@ -99,8 +103,9 @@ async fn build_db_map() -> Result<DatabaseConnectionMap> {
                 })
                 .to_string();
                 client
-                    .put_bucket_policy(bucket)
+                    .put_bucket_policy(bucket)?
                     .config(config)
+                    .build()
                     .send()
                     .await?;
             }

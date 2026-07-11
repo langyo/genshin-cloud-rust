@@ -122,6 +122,4 @@ redis = { version = "^1", features = [
   "json",
   "aio",
 ] }
-# minio: kept on 0.3 for now. 0.4 changes the Client→MinioClient/Builder and
-# the bucket-provisioning builder API; migrating is tracked as follow-up work.
-minio = "^0.3"
+minio = "^0.4"
