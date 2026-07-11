@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 
 // serde_json not needed after concrete response conversion
 
-use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{ActiveValue::Set, ExprTrait, QueryFilter, QuerySelect, prelude::*};
 
 use _database::{
     DB_CONN, models::item::item as item_model, models::item::item_type_link as link_model,
@@ -64,6 +64,17 @@ pub async fn do_get_list(
     }
     if let Some(name) = payload.name {
         query = query.filter(item_model::Column::Name.like(format!("%{}%", name)));
+    }
+    if let Some(sf) = payload.special_flag {
+        // Java parity: special_flag is a bit-mask. param == 0 means "no special
+        // flag set" (filter special_flag = 0); param > 0 means "has any of these
+        // bits" (filter (special_flag & param) != 0).
+        let sf = sf as i32;
+        if sf == 0 {
+            query = query.filter(item_model::Column::SpecialFlag.eq(0));
+        } else {
+            query = query.filter(Expr::col(item_model::Column::SpecialFlag).bit_and(sf).ne(0));
+        }
     }
     if let Some(type_list) = payload.type_id_list {
         // 与 link 表联表以按类型进行筛选
