@@ -32,3 +32,7 @@ path = "tests/area/area_domain_test.rs"
 [[test]]
 name = "marker_domain"
 path = "tests/marker/marker_domain_test.rs"
+
+[[test]]
+name = "schema"
+path = "tests/schema_test.rs"
