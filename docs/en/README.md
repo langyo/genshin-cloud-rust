@@ -41,7 +41,7 @@ Design notes capture the "why" behind non-obvious decisions. This section is
 seeded alongside the guides above; deeper ADR-style documents will be added as
 the port progresses.
 
-- - [Punctuate Workflow](./designs/punctuate-workflow.md)
+- [Punctuate Workflow](./designs/punctuate-workflow.md)
 - [BinaryMD5 Archive Export](./designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](./designs/hidden-and-special-flags.md)
 

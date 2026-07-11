@@ -27,12 +27,9 @@
 
 ## 设计文档 / Designs
 
-| 文档 | 说明 |
-| --- | --- |
-| - [打点审批工作流](./designs/punctuate-workflow.md)
-
-- [BinaryMD5 归档导出](./designs/binarymd5-archive-export.md)
-- [隐藏与特殊标记](./designs/hidden-and-special-flags.md) | 设计决策记录（ADR）将随移植推进逐步补充 |
+- [打点审批工作流](./designs/punctuate-workflow.md) — 社区众包打点提交→审核→晋升的状态机设计
+- [BinaryMD5 归档导出](./designs/binarymd5-archive-export.md) — 客户端冷启动的全量数据 GZIP 压缩增量同步管线
+- [隐藏与特殊标记](./designs/hidden-and-special-flags.md) — `hidden_flag` 数据级防剧透 + `special_flag` 位掩码过滤
 
 以下设计文档已编写完成。后续将记录 `rustls+ring` 加密后端选型、`sea-orm` 1.x→2.x
 迁移、`SafeEntityTrait` 宏重写等关键决策。
@@ -42,3 +39,7 @@
 - 完整 README（含快速开始与许可证）：[详细说明](./guides/README.md)
 - 目录（mdBook/lagrange 风格）：[SUMMARY](./SUMMARY.md)
 - 顶层项目说明：[仓库根 README](../../README.md)
+
+## 其他语言 / Other Languages
+
+[English](../en/README.md) · [**简体中文**](./README.md) · [繁體中文](../zht/README.md) · [日本語](../ja/README.md) · [한국어](../ko/README.md) · [Français](../fr/README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md) · [Deutsch](../de/README.md) · [Português](../pt/README.md)

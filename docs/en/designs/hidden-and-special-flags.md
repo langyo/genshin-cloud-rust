@@ -111,7 +111,7 @@ audit queue, not by `hidden_flag`.
 
 ## `special_flag` — the bitmask filter
 
-`special_flag` is a nullable `i32` bitmask on `item` and `area`. Its bits are
+`special_flag` is an `Option<i32>` on `item` (nullable) and a non-nullable `i32` on `area`. Its bits are
 defined by front-end convention (e.g. "this item only appears at night", "this
 area requires a quest to access") and the server treats them as opaque bits.
 

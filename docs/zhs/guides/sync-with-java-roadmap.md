@@ -19,7 +19,7 @@ Rust 后端的目标是与 Java 参考实现 `java-genshin-map-cloud` 功能对�
 | 3 | **notice / route / history** | `notice`、`route`、`history`（公共模型在 `models/common/`） | 低中 — 结构相对独立 |
 | 4 | **打点审批流 + 评分** | `punctuate`、`punctuate_audit`（audit/delete/get）、`score`（data/generate） | 高 — 状态机 + 生成逻辑 |
 | 5 | **系统域** | `user`、`role`、`device`、`invitation`、`action_log`、`archive` | 中 — 鉴权与权限耦合 |
-| 6 | **BinaryMD5 归档导出** | `item_doc`、`marker_doc`、`marker_link_doc` 的 bin/md5 分页端点；bzip2 压缩 | 高 — 二进制协议还原 |
+| 6 | **BinaryMD5 归档导出** | `item_doc`、`marker_doc`、`marker_link_doc` 的 bin/md5 分页端点；GZIP 压缩 | 高 — 二进制协议还原 |
 | 7 | **OAuth2 / JWKS** | `oauth` 路由 + JWKS 公钥分发 + 第三方登录 | 高 — 安全敏感 |
 
 ## 当前状态

@@ -34,9 +34,9 @@ serves and will later also produce them.
 
 | Domain | Prefix | Purpose |
 | --- | --- | --- |
-| Item doc | `/api/item_doc` | Paginated bz2 item-archive download (`list_page_bin`). |
-| Marker doc | `/api/marker_doc` | Paginated bz2 marker-archive download. |
-| Marker link doc | `/api/marker_link_doc` | Paginated bz2 marker-link-archive download. |
+| Item doc | `/api/item_doc` | Paginated GZIP-compressed item-archive download (`list_page_bin`). |
+| Marker doc | `/api/marker_doc` | Paginated GZIP-compressed marker-archive download. |
+| Marker link doc | `/api/marker_link_doc` | Paginated GZIP-compressed marker-link-archive download. |
 
 ## Read-through cache — fast front-end bootstrap
 
