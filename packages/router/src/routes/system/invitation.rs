@@ -112,9 +112,9 @@ pub async fn update(
 
 /// 检查用户邀请数据
 /// POST /invitation/info
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(_auth))]
 pub async fn info(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAuthInfo(_auth): ExtractAuthInfo,
     Json(payload): Json<InvitationInfoRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(())
@@ -122,9 +122,9 @@ pub async fn info(
 
 /// 使用用户邀请
 /// POST /invitation/consume
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(_auth))]
 pub async fn consume(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAuthInfo(_auth): ExtractAuthInfo,
     Json(payload): Json<InvitationConsumeRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(Json(()).into_response())

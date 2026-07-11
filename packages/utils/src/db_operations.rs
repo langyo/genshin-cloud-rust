@@ -110,23 +110,23 @@ macro_rules! impl_safe_operation {
                     })
                     .unwrap_or(1);
                 // sea-orm 2.0: UpdateOne wraps Result<ValidatedUpdateOne>; call
-                // .validate()? to unwrap, then .filter() on the ValidatedUpdateOne.
-                Ok(Self::update(ActiveModel {
+                // .validate() then .map(.filter()) to stay in Result without ?.
+                Self::update(ActiveModel {
                     version: ::sea_orm::ActiveValue::Set(last_version + 1),
                     ..model
                 })
-                .validate()?
-                .filter(Column::Version.eq(last_version)))
+                .validate()
+                .map(|v| v.filter(Column::Version.eq(last_version)))
             }
 
             fn delete_safety(
                 model: ActiveModel,
             ) -> std::result::Result<::sea_orm::ValidatedUpdateOne<ActiveModel>, ::sea_orm::DbErr> {
-                Ok(Self::update(ActiveModel {
+                Self::update(ActiveModel {
                     del_flag: ::sea_orm::ActiveValue::Set(true),
                     ..model
                 })
-                .validate()?)
+                .validate()
             }
 
             fn delete_safety_by_id(

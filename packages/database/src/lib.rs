@@ -1,3 +1,8 @@
+// sea-orm entity modules follow the `<domain>/<domain>.rs` convention, which
+// triggers clippy::module_inception. It is intentional and matches the Java
+// package layout, so allow it crate-wide.
+#![allow(clippy::module_inception)]
+
 pub mod models;
 
 use anyhow::{Context, Result, anyhow};

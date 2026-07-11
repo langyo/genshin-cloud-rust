@@ -54,10 +54,7 @@ jobs:
         run: cargo check --workspace --all-targets
 
       - name: Clippy
-        # NOTE: pre-existing lints (deprecated enum, dead code, interior
-        # mutability in jwt.rs) are tracked in CHANGELOG as technical debt.
-        # Re-add `-D warnings' once they are resolved.
-        run: cargo clippy --workspace --all-targets
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Build
         run: cargo build --workspace --release

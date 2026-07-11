@@ -35,7 +35,7 @@ pub async fn do_link(
                 if let Some(action) = p.link_action {
                     am.link_action = Set(action);
                 }
-                am.path = Set(p.path.map(|v| serde_json::to_value(v).ok()).flatten());
+                am.path = Set(p.path.and_then(|v| serde_json::to_value(v).ok()));
                 linkage_model::Entity::update_safety(am)?
                     .exec(&DB_CONN.wait().pg_conn)
                     .await?;

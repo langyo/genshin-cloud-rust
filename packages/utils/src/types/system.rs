@@ -89,6 +89,9 @@ pub enum SystemUserRole {
 }
 
 impl SystemUserRole {
+    /// Check whether this role may access content tagged with `flag`.
+    /// Kept for the role-gated query layer (RBAC); not yet wired into every route.
+    #[allow(dead_code)]
     fn is_available(self, flag: HiddenFlag) -> bool {
         if matches!(flag, HiddenFlag::Visible | HiddenFlag::Suprise) {
             return true;

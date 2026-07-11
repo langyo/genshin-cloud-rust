@@ -69,7 +69,6 @@ pub async fn do_submit(
         extra: Set(payload
             .extra
             .map(|m| serde_json::to_value(m).unwrap_or(serde_json::json!({})))),
-        ..Default::default()
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
@@ -175,15 +174,15 @@ pub async fn do_push(
     let db = &DB_CONN.wait().pg_conn;
 
     // 如果 payload 包含明确的 marker id，则更新其 extra（向后兼容）
-    if let Some(id) = payload.get("id").and_then(|v| v.as_i64()) {
-        if let Some(model) = marker_model::Entity::find_safety_by_id(id).one(db).await? {
-            let mut am: marker_model::ActiveModel = model.into();
-            if let Some(extra) = payload.get("extra") {
-                am.extra = Set(Some(extra.clone()));
-            }
-            marker_model::Entity::update_safety(am)?.exec(db).await?;
-            return Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})));
+    if let Some(id) = payload.get("id").and_then(|v| v.as_i64())
+        && let Some(model) = marker_model::Entity::find_safety_by_id(id).one(db).await?
+    {
+        let mut am: marker_model::ActiveModel = model.into();
+        if let Some(extra) = payload.get("extra") {
+            am.extra = Set(Some(extra.clone()));
         }
+        marker_model::Entity::update_safety(am)?.exec(db).await?;
+        return Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})));
     }
 
     // 否则如果 payload 包含 author_id（router 使用该字段），则视为提交待审：

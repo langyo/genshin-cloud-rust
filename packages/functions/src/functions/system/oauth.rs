@@ -49,7 +49,7 @@ async fn oauth_password_login_inner(
     redis_conn
         .set_options(
             format!("jwt:refresh:{}:{}", id, jti),
-            &"",
+            "",
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(
@@ -147,7 +147,7 @@ pub async fn oauth_client_credentials(_scope: String) -> Result<OauthAnonymousRe
     redis_conn
         .set_options(
             format!("jwt:refresh:{}:{}", id, jti),
-            &"",
+            "",
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(
@@ -213,7 +213,7 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<()> {
     redis_conn
         .set_options(
             &refresh_key_new,
-            &"",
+            "",
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(

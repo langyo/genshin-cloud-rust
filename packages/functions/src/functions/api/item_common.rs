@@ -95,8 +95,8 @@ pub async fn do_add(_auth: AuthInfo, payload: Vec<i64>) -> Result<CommonResponse
         del_flag: Set(false),
 
         name: Set("新物品".to_string()),
-        area_id: Set(payload.get(0).cloned().unwrap_or(0)),
-        default_refresh_time: Set(payload.get(2).cloned().unwrap_or(0) as i64),
+        area_id: Set(payload.first().cloned().unwrap_or(0)),
+        default_refresh_time: Set(payload.get(2).cloned().unwrap_or(0)),
         default_content: Set(None),
         default_count: Set(payload.get(1).cloned().unwrap_or(1) as i32),
         icon_id: Set(0),
@@ -104,7 +104,6 @@ pub async fn do_add(_auth: AuthInfo, payload: Vec<i64>) -> Result<CommonResponse
         hidden_flag: Set(HiddenFlag::Visible),
         sort_index: Set(0),
         special_flag: Set(None),
-        ..Default::default()
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;

@@ -71,11 +71,11 @@ pub async fn do_tweak(
                 _utils::models::marker::MarkerTweakConfigPropEnum::Content => {
                     if let Some(v) = &tweak.meta.replace {
                         am.content = Set(v.clone());
-                    } else if let Some(_val) = &tweak.meta.value {
+                    } else if let Some(_utils::models::marker::TweakValue::String(s)) =
+                        &tweak.meta.value
+                    {
                         // 简化处理：若值为 String -> 替换
-                        if let _utils::models::marker::TweakValue::String(s) = _val {
-                            am.content = Set(s.clone());
-                        }
+                        am.content = Set(s.clone());
                     }
                 },
                 _utils::models::marker::MarkerTweakConfigPropEnum::Title => {
@@ -94,39 +94,36 @@ pub async fn do_tweak(
                     }
                 },
                 _utils::models::marker::MarkerTweakConfigPropEnum::RefreshTime => {
-                    if let Some(_v) = &tweak.meta.value {
-                        if let _utils::models::marker::TweakValue::Integer(i) = _v {
-                            am.refresh_time = Set(*i);
-                        }
+                    if let Some(_v) = &tweak.meta.value
+                        && let _utils::models::marker::TweakValue::Integer(i) = _v
+                    {
+                        am.refresh_time = Set(*i);
                     }
                 },
                 _utils::models::marker::MarkerTweakConfigPropEnum::Extra => {
                     if let Some(map) = &tweak.meta.map {
                         // 用序列化后的 map 完整替换 extra
                         am.extra = Set(Some(serde_json::to_value(map)?));
-                    } else if let Some(_val) = &tweak.meta.value {
+                    } else if let Some(_utils::models::marker::TweakValue::AnythingMap(m)) =
+                        &tweak.meta.value
+                    {
                         // 尝试设置任意 JSON 值
-                        match _val {
-                            _utils::models::marker::TweakValue::AnythingMap(m) => {
-                                am.extra = Set(Some(serde_json::to_value(m)?));
-                            },
-                            _ => {},
-                        }
+                        am.extra = Set(Some(serde_json::to_value(m)?));
                     }
                 },
                 _utils::models::marker::MarkerTweakConfigPropEnum::HiddenFlag => {
-                    if let Some(_val) = &tweak.meta.value {
-                        if let _utils::models::marker::TweakValue::Integer(i) = _val {
-                            // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
-                            let hf = match *i as i32 {
-                                0 => _utils::types::HiddenFlag::Visible,
-                                1 => _utils::types::HiddenFlag::Hidden,
-                                2 => _utils::types::HiddenFlag::Spy,
-                                3 => _utils::types::HiddenFlag::Suprise,
-                                _ => _utils::types::HiddenFlag::Visible,
-                            };
-                            am.hidden_flag = Set(hf);
-                        }
+                    if let Some(_val) = &tweak.meta.value
+                        && let _utils::models::marker::TweakValue::Integer(i) = _val
+                    {
+                        // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
+                        let hf = match *i as i32 {
+                            0 => _utils::types::HiddenFlag::Visible,
+                            1 => _utils::types::HiddenFlag::Hidden,
+                            2 => _utils::types::HiddenFlag::Spy,
+                            3 => _utils::types::HiddenFlag::Suprise,
+                            _ => _utils::types::HiddenFlag::Visible,
+                        };
+                        am.hidden_flag = Set(hf);
                     }
                 },
                 _utils::models::marker::MarkerTweakConfigPropEnum::ItemList => {

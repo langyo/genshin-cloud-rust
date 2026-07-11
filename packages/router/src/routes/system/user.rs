@@ -124,6 +124,7 @@ pub struct UserListParams {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // request body type for the kick-out endpoint (not yet wired)
 pub struct UserKickOutParams {
     pub work_id: String,
 }

@@ -52,10 +52,10 @@ pub async fn do_list(
     if let Some(creator) = payload.creator {
         query = query.filter(icon_model::Column::CreatorId.eq(creator));
     }
-    if let Some(ids) = payload.icon_list {
-        if !ids.is_empty() {
-            query = query.filter(icon_model::Column::Id.is_in(ids));
-        }
+    if let Some(ids) = payload.icon_list
+        && !ids.is_empty()
+    {
+        query = query.filter(icon_model::Column::Id.is_in(ids));
     }
     if let Some(name) = payload.name {
         query = query.filter(icon_model::Column::Tag.contains(name));
@@ -64,11 +64,11 @@ pub async fn do_list(
     let total = query.clone().count(&DB_CONN.wait().pg_conn).await?;
 
     let mut select = query;
-    if let Some(current) = payload.page.current {
-        if let Some(size) = payload.page.size {
-            let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
-            select = select.limit(size as u64).offset(offset as u64);
-        }
+    if let Some(current) = payload.page.current
+        && let Some(size) = payload.page.size
+    {
+        let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
+        select = select.limit(size as u64).offset(offset);
     }
 
     let items = select.all(&DB_CONN.wait().pg_conn).await?;

@@ -75,6 +75,7 @@ pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn do_update(
     _auth: AuthInfo,
     id: i64,
