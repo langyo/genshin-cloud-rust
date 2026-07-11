@@ -28,9 +28,10 @@ authenticated session. The default body limit is 16 MiB.
 ## Compressed archive exports — BinaryMD5 bundles
 
 The `*_doc` domains serve GZIP-compressed archives the client downloads to
-bootstrap offline. The archives are produced on the Java side (BinaryMD5
-hashing) and stored in the MinIO `bz2doc` bucket; the Rust side currently
-serves and will later also produce them.
+bootstrap offline. The archives are GZIP-compressed JSON blobs keyed by the
+MD5 of the compressed bytes, generated on-the-fly from PostgreSQL by the
+Rust backend. A process-internal cache is planned to avoid regenerating on
+every request.
 
 | Domain | Prefix | Purpose |
 | --- | --- | --- |
