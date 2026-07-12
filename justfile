@@ -71,34 +71,21 @@ test:
 
 ci: fmt-check clippy check test
 
-# ── Run ──────────────────────────────────────────────────────────────────────
+# ── Dev / Run ────────────────────────────────────────────────────────────────
 
+# Start the Rust backend (reads .env for DB/host config).
 run *ARGS:
     cargo run --bin _router -- {{ARGS}}
 
-# ── E2E (end-to-end testing with Vue frontend + Shirabe browser) ─────────────
-
-# Set up the Vue3 frontend for e2e (creates .env.development.local, installs deps).
-e2e-setup:
-    {{ python_cmd }} scripts/e2e/setup_frontend.py
-
-# Start Rust backend + Vue dev server for e2e.
-e2e-start:
-    {{ python_cmd }} scripts/e2e/serve.py start
-
-# Stop all e2e services.
-e2e-stop:
-    {{ python_cmd }} scripts/e2e/serve.py stop
-
-# Check e2e service status.
-e2e-status:
-    {{ python_cmd }} scripts/e2e/serve.py status
-
-# Run Shirabe headless browser e2e tests against the running stack.
-e2e-test:
-    {{ python_cmd }} scripts/e2e/run_tests.py
-
-# Full e2e cycle: start → test → stop.
-e2e: e2e-start
-    {{ python_cmd }} scripts/e2e/run_tests.py
-    {{ python_cmd }} scripts/e2e/serve.py stop
+# Dev mode: start Rust backend + Vue3 frontend together.
+#   just dev              # start both services
+#   just dev mock         # start + run Shirabe browser e2e tests + stop
+#   just dev stop         # stop both
+#   just dev status       # check status
+#
+# Vue frontend path resolution (in scripts/e2e/config.py):
+#   1. E2E_VUE_FRONTEND env var (absolute path)
+#   2. Sibling dir auto-discovery (../vue_map_register_v3)
+#   3. Git clone from E2E_VUE_GIT (default: kongying-tavern/vue_map_register_v3)
+dev *ARGS='':
+    {{ python_cmd }} scripts/e2e/dev.py {{ARGS}}
