@@ -65,11 +65,8 @@ and `docker` are installed. Local debugging additionally requires
 just init          # 初始化开发环境 / initialize the dev environment
 just hooks         # 安装 commit-msg 钩子 / install the commit-msg hook
 just build         # 构建（release） / build (release)
-just dev           # 实时调试 / real-time debug
+just dev           # 启动开发栈（Rust + Vue）/ start dev stack
 ```
-
-> 历史命令 `cargo make build` / `cargo make dev` 仍然可用（依赖
-> `Makefile.toml`），但推荐使用 `just`。
 
 ## 工作区结构 / Workspace Layout
 

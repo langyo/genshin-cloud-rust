@@ -33,9 +33,7 @@ just ci            # fmt-check + clippy + check + test (the local CI mirror)
 ```
 
 `just` uses verb-first dispatch (`just <verb> [target]`), so `just build`,
-`just test`, `just run` all do what you would expect. The legacy
-`cargo make build` / `cargo make dev` (via `Makefile.toml`) still work but are
-not the recommended path.
+`just test`, `just dev` all do what you would expect.
 
 ## The `.env` file
 

@@ -33,11 +33,8 @@ is pinned by `rust-toolchain.toml` (stable + rustfmt + clippy).
 just init          # initialize the dev environment (cargo fetch + devtools)
 just hooks         # install the celestia-devtools commit-msg hook
 just build         # build the workspace (release; add --dev for debug)
-just dev           # real-time debug run
+just dev           # start dev stack (Rust + Vue)
 ```
-
-The legacy `cargo make build` / `cargo make dev` (via `Makefile.toml`) still
-work, but `just` is the recommended entry point going forward.
 
 Create a `.env` in the repo root (see [Building](./building.md) for the full
 variable list):

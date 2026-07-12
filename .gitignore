@@ -7,3 +7,5 @@
 
 # ZCode agent local files
 .zcode/
+*.pyc
+__pycache__/
