@@ -75,3 +75,30 @@ ci: fmt-check clippy check test
 
 run *ARGS:
     cargo run --bin _router -- {{ARGS}}
+
+# ── E2E (end-to-end testing with Vue frontend + Shirabe browser) ─────────────
+
+# Set up the Vue3 frontend for e2e (creates .env.development.local, installs deps).
+e2e-setup:
+    {{ python_cmd }} scripts/e2e/setup_frontend.py
+
+# Start Rust backend + Vue dev server for e2e.
+e2e-start:
+    {{ python_cmd }} scripts/e2e/serve.py start
+
+# Stop all e2e services.
+e2e-stop:
+    {{ python_cmd }} scripts/e2e/serve.py stop
+
+# Check e2e service status.
+e2e-status:
+    {{ python_cmd }} scripts/e2e/serve.py status
+
+# Run Shirabe headless browser e2e tests against the running stack.
+e2e-test:
+    {{ python_cmd }} scripts/e2e/run_tests.py
+
+# Full e2e cycle: start → test → stop.
+e2e: e2e-start
+    {{ python_cmd }} scripts/e2e/run_tests.py
+    {{ python_cmd }} scripts/e2e/serve.py stop

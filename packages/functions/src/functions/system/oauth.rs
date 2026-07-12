@@ -33,6 +33,8 @@ async fn oauth_password_login_inner(
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
         .await?;
     redis_conn
@@ -74,6 +76,8 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
         .await?;
     let item = redis_conn
@@ -127,6 +131,8 @@ pub async fn oauth_client_credentials(_scope: String) -> Result<OauthAnonymousRe
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
         .await?;
 
@@ -172,6 +178,8 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<()> {
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
         .await?;
 
