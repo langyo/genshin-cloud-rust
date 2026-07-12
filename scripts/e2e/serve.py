@@ -50,13 +50,17 @@ def _load_env() -> dict[str, str]:
 
 
 def _wait_for_http(url: str, timeout: float = 60) -> bool:
-    """Poll a URL until it returns any HTTP response."""
+    """Poll a URL until it returns any HTTP response (even 404 = server alive)."""
+    import urllib.error
     import urllib.request
 
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             urllib.request.urlopen(url, timeout=3)
+            return True
+        except urllib.error.HTTPError:
+            # 404, 401, etc. — the server IS responding, just no root route
             return True
         except Exception:
             time.sleep(1)
