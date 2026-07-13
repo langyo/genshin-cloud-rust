@@ -20,6 +20,12 @@ SERVE_PY = SCRIPTS_DIR / "serve.py"
 RUN_TESTS_PY = SCRIPTS_DIR / "run_tests.py"
 SETUP_PY = SCRIPTS_DIR / "setup_frontend.py"
 
+# Import the structured logger
+sys.path.insert(0, str(SCRIPTS_DIR))
+from log import info, error  # noqa: E402
+
+TARGET = "e2e::dev"
+
 
 def _run(script: Path, *args: str) -> int:
     return subprocess.call([sys.executable, str(script), *args])
@@ -29,13 +35,12 @@ def main() -> int:
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
 
     if cmd == "" or cmd == "start":
-        print("🚀 Starting dev stack (Rust + Vue)...")
-        # Ensure frontend is set up
+        info(TARGET, "Starting dev stack (Rust + Vue)...")
         _run(SETUP_PY)
         return _run(SERVE_PY, "start")
 
     elif cmd == "mock":
-        print("🤖 Starting dev stack + Shirabe e2e tests...")
+        info(TARGET, "Starting dev stack + Shirabe e2e tests...")
         _run(SETUP_PY)
         rc = _run(SERVE_PY, "start")
         if rc != 0:
@@ -55,7 +60,7 @@ def main() -> int:
         return _run(SERVE_PY, "start")
 
     else:
-        print(f"Usage: {sys.argv[0]} [start|mock|stop|status|restart]", file=sys.stderr)
+        error(TARGET, f"Unknown command: {cmd}. Usage: just dev [start|mock|stop|status|restart]")
         return 1
 
 

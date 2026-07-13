@@ -12,9 +12,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Add parent for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import RUST_PORT, VUE_FRONTEND  # noqa: E402
+from log import info, error  # noqa: E402
+
+TARGET = "e2e::setup"
 
 
 def ensure_env_override() -> None:
@@ -28,7 +30,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:{RUST_PORT}
 VITE_WS_BASE=ws://127.0.0.1:{RUST_PORT}/ws
 """
     env_local.write_text(content, encoding="utf-8")
-    print(f"✅ Wrote {env_local}")
+    info(TARGET, f"Wrote {env_local}")
 
     # Ensure .gitignore has the entry
     gitignore = VUE_FRONTEND / ".gitignore"
@@ -37,7 +39,7 @@ VITE_WS_BASE=ws://127.0.0.1:{RUST_PORT}/ws
         if ".env.*.local" not in lines and ".env.development.local" not in lines:
             with open(gitignore, "a", encoding="utf-8") as fh:
                 fh.write("\n# e2e local override\n.env.*.local\n")
-            print(f"✅ Added .env.*.local to {gitignore}")
+            info(TARGET, f"Added .env.*.local to {gitignore}")
 
 
 def ensure_deps() -> None:
@@ -46,10 +48,10 @@ def ensure_deps() -> None:
     if node_modules.exists() and any(node_modules.iterdir()):
         count = sum(1 for _ in node_modules.iterdir())
         if count > 100:
-            print(f"✅ node_modules has {count} entries — skipping install")
+            info(TARGET, f"node_modules has {count} entries — skipping install")
             return
 
-    print("📦 Running pnpm install...")
+    info(TARGET, "Running pnpm install...")
     result = subprocess.run(
         ["pnpm", "install"],
         cwd=str(VUE_FRONTEND),
@@ -59,19 +61,19 @@ def ensure_deps() -> None:
         timeout=300,
     )
     if result.returncode != 0:
-        print(f"❌ pnpm install failed:\n{result.stderr}", file=sys.stderr)
+        error(TARGET, f"pnpm install failed:\n{result.stderr}")
         sys.exit(1)
-    print("✅ pnpm install complete")
+    info(TARGET, "pnpm install complete")
 
 
 def main() -> int:
     if not VUE_FRONTEND.exists():
-        print(f"❌ Vue frontend not found at {VUE_FRONTEND}", file=sys.stderr)
+        error(TARGET, f"Vue frontend not found at {VUE_FRONTEND}")
         return 1
 
     ensure_env_override()
     ensure_deps()
-    print("\n✨ Frontend ready for e2e testing.")
+    info(TARGET, "Frontend ready for e2e testing.")
     return 0
 
 
