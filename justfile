@@ -99,5 +99,5 @@ run *ARGS:
 #   2. Sibling dir auto-discovery (../vue_map_register_v3)
 #   3. Git clone from E2E_VUE_GIT (default: kongying-tavern/vue_map_register_v3)
 dev *ARGS='':
-    python scripts/e2e/dev.py {{ARGS}} || python3 scripts/e2e/dev.py {{ARGS}}
+    python3 scripts/e2e/dev.py {{ARGS}} || python scripts/e2e/dev.py {{ARGS}}
 
