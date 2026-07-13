@@ -1,16 +1,45 @@
 """Shared configuration for e2e orchestration scripts.
 
-Windows-native: all tools (python, cargo, pnpm, node) run on Windows.
-Redis can be provided via WSL Docker (see README).
+Handles both Windows-native and WSL execution. When running under WSL,
+Windows paths in .env (D:\\...) are auto-converted to /mnt/d/... via wslpath.
 """
 
 import os
+import subprocess
 from pathlib import Path
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 RUST_BIN = "_router"
+
+
+def _is_wsl() -> bool:
+    """Detect WSL by checking /proc/version for 'microsoft'."""
+    try:
+        with open("/proc/version", encoding="utf-8", errors="replace") as f:
+            return "microsoft" in f.read().lower()
+    except Exception:
+        return False
+
+
+def _win_to_native(path_str: str) -> str:
+    """Convert a Windows path to the native format.
+
+    On WSL, use `wslpath -u` to convert D:\\foo → /mnt/d/foo.
+    On Windows, return as-is.
+    """
+    if _is_wsl():
+        try:
+            result = subprocess.run(
+                ["wslpath", "-u", path_str],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+    return path_str
 
 
 def _load_dotenv() -> None:
@@ -41,10 +70,13 @@ def _resolve_vue_frontend() -> Path:
             "Add it to .env, e.g.:\n"
             "  E2E_VUE_FRONTEND=D:\\code\\vue_map_register_v3"
         )
-    p = Path(env_path).resolve()
+    # Convert Windows path to native if running in WSL
+    native_path = _win_to_native(env_path)
+    p = Path(native_path).resolve()
     if not (p / "package.json").exists():
         raise RuntimeError(
             f"E2E_VUE_FRONTEND={env_path}\n"
+            f"  Resolved to: {p}\n"
             f"  Does not contain package.json — wrong path?"
         )
     return p
