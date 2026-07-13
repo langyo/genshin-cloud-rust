@@ -25,6 +25,12 @@ def ensure_env_override() -> None:
 VITE_API_BASE=/api
 VITE_API_PROXY_TARGET=http://127.0.0.1:{RUST_PORT}
 VITE_WS_BASE=ws://127.0.0.1:{RUST_PORT}/ws
+# CDN overrides: assets.yuanshen.site is partially down (dadian-preview 404).
+# v3.yuanshen.site serves the dadian archive + tiles; assets.yuanshen.site
+# still serves icons. The dadian config file drives tile URLs via
+# VITE_ASSETS_BASE, so we point that at v3 for tiles but keep icons on assets.
+VITE_CONFIG_ARCHIVE=https://v3.yuanshen.site/dadian-preview.json.bz2
+VITE_ASSETS_BASE=https://v3.yuanshen.site
 """
     env_local.write_text(content, encoding="utf-8")
     info(TARGET, f"Wrote {env_local}")
