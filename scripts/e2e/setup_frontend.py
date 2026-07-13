@@ -3,7 +3,7 @@
 
 Creates `.env.development.local` in the Vue project to override the Vite proxy
 target, pointing `/api` at the local Rust backend instead of the remote dev
-server. Also runs `pnpm install` if node_modules is missing or incomplete.
+server. Skips pnpm install in WSL (cross-platform node_modules incompatibility).
 """
 
 from __future__ import annotations
@@ -14,9 +14,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import RUST_PORT, VUE_FRONTEND  # noqa: E402
-from log import info, error  # noqa: E402
+from log import info, warn, error  # noqa: E402
 
 TARGET = "e2e::setup"
+
+
+def _is_wsl() -> bool:
+    """Detect if running inside WSL."""
+    try:
+        with open("/proc/version", encoding="utf-8", errors="replace") as f:
+            return "microsoft" in f.read().lower()
+    except Exception:
+        return False
 
 
 def ensure_env_override() -> None:
@@ -42,14 +51,24 @@ VITE_WS_BASE=ws://127.0.0.1:{RUST_PORT}/ws
             info(TARGET, f"Added .env.*.local to {gitignore}")
 
 
-def ensure_deps() -> None:
-    """Run pnpm install if node_modules is missing or incomplete."""
+def ensure_deps() -> bool:
+    """Ensure node_modules exists. Returns True if ready, False if not.
+
+    In WSL, pnpm install on a Windows-mounted path (/mnt/d/...) fails because
+    pnpm tries to use Windows pnpm and node_modules are platform-specific.
+    We skip install in WSL and just check if node_modules already exists.
+    """
     node_modules = VUE_FRONTEND / "node_modules"
     if node_modules.exists() and any(node_modules.iterdir()):
         count = sum(1 for _ in node_modules.iterdir())
-        if count > 100:
-            info(TARGET, f"node_modules has {count} entries — skipping install")
-            return
+        if count > 10:
+            info(TARGET, f"node_modules has {count} entries — ready")
+            return True
+
+    if _is_wsl():
+        warn(TARGET, "Running in WSL — cannot run pnpm install on /mnt/ path.")
+        warn(TARGET, f"Please install deps on Windows: cd {VUE_FRONTEND} && pnpm install")
+        return node_modules.exists()
 
     info(TARGET, "Running pnpm install...")
     result = subprocess.run(
@@ -62,8 +81,9 @@ def ensure_deps() -> None:
     )
     if result.returncode != 0:
         error(TARGET, f"pnpm install failed:\n{result.stderr}")
-        sys.exit(1)
+        return False
     info(TARGET, "pnpm install complete")
+    return True
 
 
 def main() -> int:
@@ -72,9 +92,12 @@ def main() -> int:
         return 1
 
     ensure_env_override()
-    ensure_deps()
-    info(TARGET, "Frontend ready for e2e testing.")
-    return 0
+    ready = ensure_deps()
+    if ready:
+        info(TARGET, "Frontend ready for e2e testing.")
+    else:
+        warn(TARGET, "Frontend deps not ready, but continuing anyway.")
+    return 0  # Always return 0 — don't block the dev stack
 
 
 if __name__ == "__main__":
