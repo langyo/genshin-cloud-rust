@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -30,6 +31,9 @@ from config import (  # noqa: E402
     VUE_PORT,
     VUE_URL,
 )
+from log import info, warn, error  # noqa: E402
+
+TARGET = "e2e::serve"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,7 +64,6 @@ def _wait_for_http(url: str, timeout: float = 60) -> bool:
             urllib.request.urlopen(url, timeout=3)
             return True
         except urllib.error.HTTPError:
-            # 404, 401, etc. — the server IS responding, just no root route
             return True
         except Exception:
             time.sleep(1)
@@ -98,36 +101,64 @@ def _kill_proc(pid: int) -> bool:
         return False
 
 
+def _have_malkuth() -> str | None:
+    """Return the malkuth binary path if available, else None."""
+    return shutil.which("malkuth") or shutil.which("npx")
+
+
 # ── Service definitions ──────────────────────────────────────────────────────
 
 
 def start_rust() -> dict | None:
-    """Start the Rust backend."""
+    """Start the Rust backend, optionally via malkuth for auto-restart."""
     env = {**os.environ, **_load_env()}
     env["PORT"] = str(RUST_PORT)
 
-    print(f"🦀 Starting Rust backend on port {RUST_PORT}...")
+    # Check if malkuth CLI is available for file-watch auto-restart
+    malkuth = shutil.which("malkuth")
+    if malkuth:
+        info(TARGET, f"Starting Rust backend via malkuth (file-watch + auto-restart)...")
+        cmd = [
+            malkuth,
+            "--watch", str(REPO_ROOT / "packages"),
+            "--",
+            "cargo", "run", "--bin", "_router",
+        ]
+    else:
+        # Try npx malkuth
+        npx = shutil.which("npx")
+        if npx:
+            info(TARGET, f"Starting Rust backend via npx malkuth (file-watch + auto-restart)...")
+            cmd = [
+                npx, "@celestia-island/malkuth",
+                "--watch", str(REPO_ROOT / "packages"),
+                "--",
+                "cargo", "run", "--bin", "_router",
+            ]
+        else:
+            info(TARGET, f"Starting Rust backend (no malkuth, plain cargo run)...")
+            cmd = ["cargo", "run", "--bin", "_router"]
+
     proc = subprocess.Popen(
-        ["cargo", "run", "--bin", "_router"],
+        cmd,
         cwd=str(REPO_ROOT),
         env=env,
         stdout=open(STATE_DIR / "rust.log", "w", encoding="utf-8"),
         stderr=subprocess.STDOUT,
     )
 
-    # Wait for the HTTP server to be reachable
     if _wait_for_http(f"{RUST_URL}/", timeout=120):
-        print(f"✅ Rust backend ready at {RUST_URL}")
+        info(TARGET, f"Rust backend ready at {RUST_URL}")
         return {"pid": proc.pid, "url": RUST_URL, "name": "rust"}
     else:
-        print(f"❌ Rust backend did not become ready in 120s", file=sys.stderr)
+        error(TARGET, f"Rust backend did not become ready in 120s")
         _kill_proc(proc.pid)
         return None
 
 
 def start_vue() -> dict | None:
     """Start the Vue dev server."""
-    print(f"💚 Starting Vue dev server on port {VUE_PORT}...")
+    info(TARGET, f"Starting Vue dev server on port {VUE_PORT}...")
     proc = subprocess.Popen(
         ["pnpm", "dev"],
         cwd=str(VUE_FRONTEND),
@@ -137,10 +168,10 @@ def start_vue() -> dict | None:
     )
 
     if _wait_for_http(VUE_URL, timeout=60):
-        print(f"✅ Vue frontend ready at {VUE_URL}")
+        info(TARGET, f"Vue frontend ready at {VUE_URL}")
         return {"pid": proc.pid, "url": VUE_URL, "name": "vue"}
     else:
-        print(f"❌ Vue frontend did not become ready in 60s", file=sys.stderr)
+        error(TARGET, f"Vue frontend did not become ready in 60s")
         _kill_proc(proc.pid)
         return None
 
@@ -162,34 +193,30 @@ def cmd_start() -> int:
 
     vue_info = start_vue()
     if vue_info is None:
-        # Stop what we started
         _kill_proc(rust_info["pid"])
         return 1
     processes["vue"] = vue_info
 
     _save_state(processes)
-    print(f"\n✨ All services running:")
-    print(f"   Rust: {RUST_URL}")
-    print(f"   Vue:  {VUE_URL}")
-    print(f"   State: {PID_FILE}")
+    info(TARGET, f"All services running — Rust: {RUST_URL}  Vue: {VUE_URL}")
     return 0
 
 
 def cmd_stop() -> int:
     state = _load_state()
     if not state:
-        print("ℹ️  No services recorded.")
+        info(TARGET, "No services recorded.")
         return 0
 
-    for name, info in state.items():
-        pid = info.get("pid")
+    for name, svc_info in state.items():
+        pid = svc_info.get("pid")
         if pid:
             killed = _kill_proc(pid)
             status = "killed" if killed else "already dead"
-            print(f"  {name} (pid {pid}): {status}")
+            info(TARGET, f"{name} (pid {pid}): {status}")
 
     PID_FILE.unlink(missing_ok=True)
-    print("✨ All services stopped.")
+    info(TARGET, "All services stopped.")
     return 0
 
 
@@ -199,13 +226,11 @@ def cmd_status() -> int:
         print(json.dumps({"running": False}))
         return 0
 
-    # Check if processes are still alive
     alive = {}
     for name, info in state.items():
         pid = info.get("pid", 0)
         try:
             if os.name == "nt":
-                # Windows: check if process exists
                 subprocess.run(
                     ["tasklist", "/FI", f"PID eq {pid}"],
                     capture_output=True,
@@ -216,7 +241,7 @@ def cmd_status() -> int:
                 os.kill(pid, 0)
                 alive[name] = info
         except Exception:
-            pass  # process is dead
+            pass
 
     output = {
         "running": len(alive) > 0,
@@ -245,7 +270,7 @@ def main() -> int:
         time.sleep(2)
         return cmd_start()
     else:
-        print(f"Unknown command: {cmd}", file=sys.stderr)
+        error(TARGET, f"Unknown command: {cmd}")
         return 1
 
 
