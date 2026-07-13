@@ -2,7 +2,8 @@
 """E2E service orchestrator — manages Rust backend + Vue frontend.
 
 Usage:
-    python scripts/e2e/serve.py start    # launch all services
+    python scripts/e2e/serve.py start    # launch services, then block (foreground)
+    python scripts/e2e/serve.py start --daemon  # launch services, return immediately
     python scripts/e2e/serve.py stop     # stop all services
     python scripts/e2e/serve.py status   # print JSON status
     python scripts/e2e/serve.py restart  # stop + start
@@ -19,7 +20,6 @@ import sys
 import time
 from pathlib import Path
 
-# Add parent for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import (  # noqa: E402
     PID_FILE,
@@ -39,7 +39,6 @@ TARGET = "e2e::serve"
 
 
 def _load_env() -> dict[str, str]:
-    """Load .env from REPO_ROOT into a dict."""
     env_file = REPO_ROOT / ".env"
     env: dict[str, str] = {}
     if env_file.exists():
@@ -54,7 +53,6 @@ def _load_env() -> dict[str, str]:
 
 
 def _wait_for_http(url: str, timeout: float = 60) -> bool:
-    """Poll a URL until it returns any HTTP response (even 404 = server alive)."""
     import urllib.error
     import urllib.request
 
@@ -81,7 +79,6 @@ def _load_state() -> dict:
 
 
 def _kill_proc(pid: int) -> bool:
-    """Kill a process by PID. Returns True if it was alive."""
     try:
         if os.name == "nt":
             subprocess.run(
@@ -101,22 +98,42 @@ def _kill_proc(pid: int) -> bool:
         return False
 
 
-def _have_malkuth() -> str | None:
-    """Return the malkuth binary path if available, else None."""
-    return shutil.which("malkuth") or shutil.which("npx")
-
-
 # ── Service definitions ──────────────────────────────────────────────────────
 
 
 def start_rust() -> dict | None:
-    """Start the Rust backend."""
-    env = {**os.environ, **_load_env()}
-    env["PORT"] = str(RUST_PORT)
+    """Start the Rust backend.
 
-    info(TARGET, f"Starting Rust backend on port {RUST_PORT}...")
+    If malkuth is available, wrap cargo run with file-watch + auto-restart.
+    malkuth's proxy listens on RUST_PORT and forwards to the pod, which gets
+    a port from the proxy range via the PORT env var. On file change malkuth
+    drains and restarts the pod (hot reload).
+    """
+    env = {**os.environ, **_load_env()}
+
+    malkuth = shutil.which("malkuth")
+    if malkuth:
+        # malkuth proxy on RUST_PORT, pods assigned from RUST_PORT+1..RUST_PORT+9
+        pod_port_lo = RUST_PORT + 1
+        pod_port_hi = RUST_PORT + 9
+        info(TARGET, f"Starting Rust backend via malkuth (proxy:{RUST_PORT} pods:{pod_port_lo}-{pod_port_hi})...")
+        # Remove PORT from env so malkuth can assign it via --port-env
+        env.pop("PORT", None)
+        cmd = [
+            malkuth,
+            "--watch", str(REPO_ROOT / "packages"),
+            "--proxy", f"{RUST_PORT}:{pod_port_lo}-{pod_port_hi}",
+            "--port-env", "PORT",
+            "--",
+            "cargo", "run", "--bin", "_router",
+        ]
+    else:
+        info(TARGET, f"Starting Rust backend on port {RUST_PORT}...")
+        env["PORT"] = str(RUST_PORT)
+        cmd = ["cargo", "run", "--bin", "_router"]
+
     proc = subprocess.Popen(
-        ["cargo", "run", "--bin", "_router"],
+        cmd,
         cwd=str(REPO_ROOT),
         env=env,
         stdout=open(STATE_DIR / "rust.log", "w", encoding="utf-8"),
@@ -133,7 +150,6 @@ def start_rust() -> dict | None:
 
 
 def start_vue() -> dict | None:
-    """Start the Vue dev server."""
     info(TARGET, f"Starting Vue dev server on port {VUE_PORT}...")
     proc = subprocess.Popen(
         ["pnpm", "dev"],
@@ -155,8 +171,7 @@ def start_vue() -> dict | None:
 # ── Commands ─────────────────────────────────────────────────────────────────
 
 
-def cmd_start() -> int:
-    # Ensure frontend is configured
+def cmd_start(daemon: bool = False) -> int:
     setup_script = Path(__file__).parent / "setup_frontend.py"
     subprocess.run([sys.executable, str(setup_script)], check=True)
 
@@ -175,7 +190,19 @@ def cmd_start() -> int:
 
     _save_state(processes)
     info(TARGET, f"All services running — Rust: {RUST_URL}  Vue: {VUE_URL}")
-    return 0
+
+    if daemon:
+        return 0
+
+    # Foreground mode: block until Ctrl-C, then clean up.
+    info(TARGET, "Running in foreground. Press Ctrl-C to stop all services.")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        info(TARGET, "Received Ctrl-C, stopping all services...")
+        cmd_stop()
+        return 0
 
 
 def cmd_stop() -> int:
@@ -203,8 +230,8 @@ def cmd_status() -> int:
         return 0
 
     alive = {}
-    for name, info in state.items():
-        pid = info.get("pid", 0)
+    for name, svc_info in state.items():
+        pid = svc_info.get("pid", 0)
         try:
             if os.name == "nt":
                 subprocess.run(
@@ -212,10 +239,10 @@ def cmd_status() -> int:
                     capture_output=True,
                     timeout=5,
                 )
-                alive[name] = info
+                alive[name] = svc_info
             else:
                 os.kill(pid, 0)
-                alive[name] = info
+                alive[name] = svc_info
         except Exception:
             pass
 
@@ -230,23 +257,20 @@ def cmd_status() -> int:
 
 
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("Usage: python serve.py {start|stop|status|restart}")
-        return 1
-
-    cmd = sys.argv[1]
-    if cmd == "start":
-        return cmd_start()
-    elif cmd == "stop":
+    args = sys.argv[1:]
+    if not args or args[0] == "start":
+        daemon = "--daemon" in args
+        return cmd_start(daemon=daemon)
+    elif args[0] == "stop":
         return cmd_stop()
-    elif cmd == "status":
+    elif args[0] == "status":
         return cmd_status()
-    elif cmd == "restart":
+    elif args[0] == "restart":
         cmd_stop()
         time.sleep(2)
         return cmd_start()
     else:
-        error(TARGET, f"Unknown command: {cmd}")
+        error(TARGET, f"Unknown command: {args[0]}")
         return 1
 
 

@@ -86,16 +86,12 @@ run *ARGS:
     cargo run --bin _router -- {{ARGS}}
 
 # Dev mode: start Rust backend + Vue3 frontend together.
-#   just dev              # start both services
+#   just dev              # start both, block in foreground (Ctrl-C to stop)
+#   just dev daemon       # start both, return immediately (use `just dev stop`)
 #   just dev mock         # start → Shirabe browser e2e tests → stop
 #   just dev stop         # stop both
 #   just dev status       # check status
 #   just dev restart      # stop + start
-#
-# Vue frontend path resolution (in scripts/e2e/config.py):
-#   1. E2E_VUE_FRONTEND env var (absolute path)
-#   2. Sibling dir auto-discovery (../vue_map_register_v3)
-#   3. Git clone from E2E_VUE_GIT (default: kongying-tavern/vue_map_register_v3)
 dev *ARGS='':
     {{ python_cmd }} scripts/e2e/dev.py {{ARGS}}
 
