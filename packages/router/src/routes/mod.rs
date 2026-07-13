@@ -11,7 +11,7 @@ use axum::{
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
         .route("/oauth/token", post(system::oauth::oauth))
-        .merge(system::router().await?)
+        .nest("/system", system::router().await?)
         .merge(api::router().await?)
         .fallback(|| async { (StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
         .layer(from_extractor::<crate::middlewares::ExtractUserAgent>())
