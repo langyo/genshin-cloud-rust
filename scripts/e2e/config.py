@@ -1,13 +1,10 @@
 """Shared configuration for e2e orchestration scripts.
 
-All paths and ports are env-var driven.
-The Vue3 frontend path MUST be set via E2E_VUE_FRONTEND in .env.
-Supports both Windows-native and WSL execution paths.
+Windows-native: all tools (python, cargo, pnpm, node) run on Windows.
+Redis can be provided via WSL Docker (see README).
 """
 
 import os
-import shutil
-import subprocess
 from pathlib import Path
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -31,55 +28,24 @@ def _load_dotenv() -> None:
             os.environ[k] = v
 
 
-# Load .env immediately on import so all downstream code sees the values.
 _load_dotenv()
 
-
-def _to_native_path(p: str) -> Path:
-    """Convert a Windows-style path to the native format.
-
-    When running under WSL, Windows paths like 'D:\\foo\\bar' need to be
-    converted to '/mnt/d/foo/bar'. When running on Windows natively, the
-    path is used as-is.
-    """
-    # Check if we're in WSL (Linux with /mnt/d or similar)
-    if os.path.exists("/proc/version"):
-        with open("/proc/version", encoding="utf-8", errors="replace") as f:
-            if "microsoft" in f.read().lower():
-                # We're in WSL — try wslpath conversion
-                try:
-                    result = subprocess.run(
-                        ["wslpath", "-u", p],
-                        capture_output=True,
-                        text=True,
-                        timeout=5,
-                    )
-                    if result.returncode == 0 and result.stdout.strip():
-                        return Path(result.stdout.strip())
-                except Exception:
-                    pass
-    return Path(p)
-
-
-# ── Vue frontend path ────────────────────────────────────────────────────────
+# ── Vue frontend path (required in .env) ─────────────────────────────────────
 
 
 def _resolve_vue_frontend() -> Path:
     env_path = os.environ.get("E2E_VUE_FRONTEND")
     if not env_path:
         raise RuntimeError(
-            "E2E_VUE_FRONTEND is not set. "
-            "Add it to .env with the absolute path to the Vue3 frontend project.\n"
-            "Example: E2E_VUE_FRONTEND=/path/to/vue_map_register_v3"
+            "E2E_VUE_FRONTEND is not set.\n"
+            "Add it to .env, e.g.:\n"
+            "  E2E_VUE_FRONTEND=D:\\code\\vue_map_register_v3"
         )
-
-    p = _to_native_path(env_path).resolve()
+    p = Path(env_path).resolve()
     if not (p / "package.json").exists():
         raise RuntimeError(
             f"E2E_VUE_FRONTEND={env_path}\n"
-            f"  Resolved to: {p}\n"
-            f"  This path does not contain package.json. "
-            "Is it the correct Vue3 frontend project?"
+            f"  Does not contain package.json — wrong path?"
         )
     return p
 
