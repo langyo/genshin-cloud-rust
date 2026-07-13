@@ -110,37 +110,13 @@ def _have_malkuth() -> str | None:
 
 
 def start_rust() -> dict | None:
-    """Start the Rust backend, optionally via malkuth for auto-restart."""
+    """Start the Rust backend."""
     env = {**os.environ, **_load_env()}
     env["PORT"] = str(RUST_PORT)
 
-    # Check if malkuth CLI is available for file-watch auto-restart
-    malkuth = shutil.which("malkuth")
-    if malkuth:
-        info(TARGET, f"Starting Rust backend via malkuth (file-watch + auto-restart)...")
-        cmd = [
-            malkuth,
-            "--watch", str(REPO_ROOT / "packages"),
-            "--",
-            "cargo", "run", "--bin", "_router",
-        ]
-    else:
-        # Try npx malkuth
-        npx = shutil.which("npx")
-        if npx:
-            info(TARGET, f"Starting Rust backend via npx malkuth (file-watch + auto-restart)...")
-            cmd = [
-                npx, "@celestia-island/malkuth",
-                "--watch", str(REPO_ROOT / "packages"),
-                "--",
-                "cargo", "run", "--bin", "_router",
-            ]
-        else:
-            info(TARGET, f"Starting Rust backend (no malkuth, plain cargo run)...")
-            cmd = ["cargo", "run", "--bin", "_router"]
-
+    info(TARGET, f"Starting Rust backend on port {RUST_PORT}...")
     proc = subprocess.Popen(
-        cmd,
+        ["cargo", "run", "--bin", "_router"],
         cwd=str(REPO_ROOT),
         env=env,
         stdout=open(STATE_DIR / "rust.log", "w", encoding="utf-8"),
