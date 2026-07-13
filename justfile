@@ -14,10 +14,8 @@
 
 set unstable
 set lists
-# Git for Windows keeps bash.exe on PATH; cygpath is NOT on PATH, so shebang
-# recipes die without this.
-set shell := ["bash", "-c"]
-set windows-shell := ["bash.exe", "-c"]
+# Use the full path to Git Bash to avoid WSL bash hijacking.
+set windows-shell := ["C:/Program Files/Git/usr/bin/bash.exe", "-c"]
 
 # Import vendored devtools recipes (provides python_cmd, cache-guard, etc.).
 # Recipes we don't use are overridden below or simply ignored.
