@@ -88,6 +88,7 @@ dependencies = [
  "base64",
  "bcrypt",
  "bytes",
+ "bzip2",
  "chrono",
  "derive_more 2.1.1",
  "env_logger",

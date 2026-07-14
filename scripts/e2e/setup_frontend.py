@@ -25,12 +25,12 @@ def ensure_env_override() -> None:
 VITE_API_BASE=/api
 VITE_API_PROXY_TARGET=http://127.0.0.1:{RUST_PORT}
 VITE_WS_BASE=ws://127.0.0.1:{RUST_PORT}/ws
-# CDN overrides: assets.yuanshen.site is partially down (dadian-preview 404).
-# v3.yuanshen.site serves the dadian archive + tiles; assets.yuanshen.site
-# still serves icons. The dadian config file drives tile URLs via
-# VITE_ASSETS_BASE, so we point that at v3 for tiles but keep icons on assets.
-VITE_CONFIG_ARCHIVE=https://v3.yuanshen.site/dadian-preview.json.bz2
-VITE_ASSETS_BASE=https://v3.yuanshen.site
+# CDN overrides: assets.yuanshen.site has CORS (*) but dadian-preview is 404.
+# v3.yuanshen.site has dadian-preview + tiles but NO CORS headers.
+# Solution: proxy v3 through Vite dev server (which adds CORS via changeOrigin).
+# Vite proxy strips /cdn prefix → fetches from v3.yuanshen.site
+VITE_CONFIG_ARCHIVE=http://127.0.0.1:{RUST_PORT}/cdn/dadian-preview.json.bz2
+VITE_ASSETS_BASE=http://127.0.0.1:{RUST_PORT}/cdn
 """
     env_local.write_text(content, encoding="utf-8")
     info(TARGET, f"Wrote {env_local}")
