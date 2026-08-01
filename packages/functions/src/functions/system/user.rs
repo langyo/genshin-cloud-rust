@@ -133,6 +133,7 @@ pub async fn do_update(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn do_update_password(
     _auth: AuthInfo,
     _access_policy: Vec<AccessPolicyItemEnum>,
@@ -250,7 +251,10 @@ pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
         return Ok(());
     };
     use redis::AsyncCommands;
-    let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
+    let Ok(mut redis_conn) = redis_client.get_multiplexed_async_connection().await else {
+        // Redis 连接失败同样降级（与 oauth 的降级策略一致）
+        return Ok(());
+    };
 
     let access_prefix = format!("jwt:access:{user_id}:*");
     let refresh_prefix = format!("jwt:refresh:{user_id}:*");
