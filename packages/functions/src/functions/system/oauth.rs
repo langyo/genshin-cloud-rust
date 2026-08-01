@@ -64,7 +64,9 @@ async fn check_access_policy(
                 let blocked = models::system::sys_user_device::Entity::find_safety()
                     .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
                     .filter(models::system::sys_user_device::Column::Status.ne(0))
-                    .filter(models::system::sys_user_device::Column::Ipv4.eq(Some(ip.ip().to_string())))
+                    .filter(
+                        models::system::sys_user_device::Column::Ipv4.eq(Some(ip.ip().to_string())),
+                    )
                     .one(db)
                     .await?;
                 if blocked.is_some() {
