@@ -43,7 +43,7 @@ async fn check_access_policy(
             AccessPolicyItemEnum::IpSameLastIp => {
                 if let Some(dev) = &last
                     && let Some(last_ip) = &dev.ipv4
-                    && ip.to_string() != *last_ip
+                    && ip.ip().to_string() != *last_ip
                 {
                     return Err(anyhow!(
                         "Access denied: IP {} does not match the last login IP {last_ip}",
@@ -64,7 +64,7 @@ async fn check_access_policy(
                 let blocked = models::system::sys_user_device::Entity::find_safety()
                     .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
                     .filter(models::system::sys_user_device::Column::Status.ne(0))
-                    .filter(models::system::sys_user_device::Column::Ipv4.eq(Some(ip.to_string())))
+                    .filter(models::system::sys_user_device::Column::Ipv4.eq(Some(ip.ip().to_string())))
                     .one(db)
                     .await?;
                 if blocked.is_some() {
@@ -101,7 +101,7 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
     let now = chrono::Utc::now().naive_utc();
     if let Some(dev) = existing {
         let mut am: models::system::sys_user_device::ActiveModel = dev.into();
-        am.ipv4 = Set(Some(ip.to_string()));
+        am.ipv4 = Set(Some(ip.ip().to_string()));
         am.last_login_time = Set(Some(now));
         models::system::sys_user_device::Entity::update_safety(am)?
             .exec(db)
@@ -117,7 +117,7 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
             del_flag: Set(false),
             user_id: Set(Some(user_id)),
             device_id: Set(user_agent.to_string()),
-            ipv4: Set(Some(ip.to_string())),
+            ipv4: Set(Some(ip.ip().to_string())),
             status: Set(0),
             last_login_time: Set(Some(now)),
         };
@@ -243,7 +243,7 @@ pub async fn oauth_password_login(
         updater_id: Set(None),
         del_flag: Set(false),
         user_id: Set(Some(user_id)),
-        ipv4: Set(Some(ip.to_string())),
+        ipv4: Set(Some(ip.ip().to_string())),
         device_id: Set(user_agent),
         action: Set(SystemActionLogAction::Login),
         is_error: Set(ret.is_err()),
