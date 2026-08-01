@@ -235,13 +235,19 @@ pub async fn oauth_password_login(
     }
 
     models::system::sys_action_log::ActiveModel {
+        version: Set(0),
+        id: Set(0),
+        create_time: Set(chrono::Utc::now().naive_utc()),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
         user_id: Set(Some(user_id)),
         ipv4: Set(Some(ip.to_string())),
         device_id: Set(user_agent),
         action: Set(SystemActionLogAction::Login),
         is_error: Set(ret.is_err()),
         extra_data: Set(Default::default()),
-        ..Default::default()
     }
     .insert(&DB_CONN.wait().pg_conn)
     .await?;
