@@ -468,12 +468,12 @@ async fn area_and_item_doc_business_assertions() {
 
     // ── Assertion 5: punctuate audit enforces roles and commits atomically ───
     // Seed two Reviewing "Added" punctuates.
-    let p1 = seed_punctuate(db, 9001, MarkerPunctuateMethodType::Added, now)
+    seed_punctuate(db, 9001, MarkerPunctuateMethodType::Added, now)
         .await
-        .expect("seed punctuate p1");
-    let p2 = seed_punctuate(db, 9002, MarkerPunctuateMethodType::Added, now)
+        .expect("seed punctuate 9001");
+    seed_punctuate(db, 9002, MarkerPunctuateMethodType::Added, now)
         .await
-        .expect("seed punctuate p2");
+        .expect("seed punctuate 9002");
     let marker_before = marker_model::Entity::find_safety()
         .count(db)
         .await
@@ -482,18 +482,18 @@ async fn area_and_item_doc_business_assertions() {
     // Non-auditor role (MapUser) must be rejected for pass and reject
     let user_auth = stub_auth_with_role(SystemUserRole::MapUser);
     assert!(
-        audit_fns::do_pass(user_auth.clone(), p1).await.is_err(),
+        audit_fns::do_pass(user_auth.clone(), 9001).await.is_err(),
         "MapUser must not be allowed to pass an audit"
     );
     assert!(
-        audit_fns::do_reject(user_auth, p1, "nope".into())
+        audit_fns::do_reject(user_auth, 9001, "nope".into())
             .await
             .is_err(),
         "MapUser must not be allowed to reject an audit"
     );
 
     // Admin rejects p2 → status becomes Rejected with the remark
-    audit_fns::do_reject(auth.clone(), p2, "bad data".into())
+    audit_fns::do_reject(auth.clone(), 9002, "bad data".into())
         .await
         .expect("admin rejects")
         .data
@@ -507,8 +507,8 @@ async fn area_and_item_doc_business_assertions() {
     assert_eq!(rejected.status, MarkerPunctuateStatus::Rejected);
     assert_eq!(rejected.audit_remark.as_deref(), Some("bad data"));
 
-    // Admin passes p1 → marker inserted AND punctuate record hard-deleted
-    audit_fns::do_pass(auth.clone(), p1)
+    // Admin passes 9001 → marker inserted AND punctuate record hard-deleted
+    audit_fns::do_pass(auth.clone(), 9001)
         .await
         .expect("admin passes")
         .data
