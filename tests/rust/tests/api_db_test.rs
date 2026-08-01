@@ -15,7 +15,8 @@ use _database::DB_CONN;
 use _database::models::{
     area::area as area_model, item::item as item_model, marker::marker as marker_model,
     marker::marker_item_link as mil_model, marker::marker_punctuate as mp_model,
-    system::sys_user as sys_user_model, system::sys_user_device as device_model,
+    system::sys_action_log as action_log_model, system::sys_user as sys_user_model,
+    system::sys_user_device as device_model,
 };
 use _functions::functions::api::{
     area as area_fns, item_doc, marker as marker_fns, punctuate_audit as audit_fns,
@@ -200,6 +201,7 @@ async fn area_and_item_doc_business_assertions() {
     let ddls = [
         ddl_without_foreign_keys(sys_user_model::Entity),
         ddl_without_foreign_keys(device_model::Entity),
+        ddl_without_foreign_keys(action_log_model::Entity),
         ddl_without_foreign_keys(area_model::Entity),
         ddl_without_foreign_keys(item_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
@@ -211,6 +213,7 @@ async fn area_and_item_doc_business_assertions() {
         &[
             "sys_user",
             "sys_user_device",
+            "sys_action_log",
             "area",
             "item",
             "marker",
