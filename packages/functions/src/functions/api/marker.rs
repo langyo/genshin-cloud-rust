@@ -253,7 +253,8 @@ async fn insert_item_link(
     let now = Utc::now().naive_utc();
     let am = mil_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        // id 为 IDENTITY 列：NotSet 走自增，避免多条插入共用 id=0 撞主键
+        id: sea_orm::ActiveValue::NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),
