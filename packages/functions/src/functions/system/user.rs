@@ -1,7 +1,11 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryFilter, QuerySelect,
+    prelude::*,
+};
 
 use _database::DB_CONN;
 use _database::models::system::sys_user as sys_user_model;
@@ -28,7 +32,7 @@ pub async fn do_register(
     let now = Utc::now().naive_utc();
     let am = sys_user_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),
@@ -67,7 +71,7 @@ pub async fn do_register_qq(
     let now = Utc::now().naive_utc();
     let am = sys_user_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),

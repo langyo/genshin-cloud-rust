@@ -2,7 +2,11 @@ use anyhow::{Result, anyhow};
 use std::net::SocketAddr;
 
 use redis::{AsyncTypedCommands, SetOptions};
-use sea_orm::{ActiveValue::Set, QueryOrder, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryOrder,
+    prelude::*,
+};
 
 use _database::{DB_CONN, models};
 use _utils::{
@@ -111,7 +115,7 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
     } else {
         let am = models::system::sys_user_device::ActiveModel {
             version: Set(0),
-            id: Set(0),
+            id: NotSet,
             create_time: Set(now),
             update_time: Set(None),
             creator_id: Set(None),
@@ -243,7 +247,7 @@ pub async fn oauth_password_login(
 
     models::system::sys_action_log::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(chrono::Utc::now().naive_utc()),
         update_time: Set(None),
         creator_id: Set(None),
@@ -301,7 +305,7 @@ pub async fn oauth_qq_login(
     }
     models::system::sys_action_log::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(chrono::Utc::now().naive_utc()),
         update_time: Set(None),
         creator_id: Set(None),
