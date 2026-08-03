@@ -18,6 +18,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Carry the item `typeIdList` in every `ItemVO` (Java `ItemVo` parity): the
+  field was missing, so the frontend's item panel (which filters/group by
+  type) stayed empty. All producers now fill it from `item_type_link` —
+  `item` get/list + list_by_id, the `item_doc` BinaryMD5 pages (the
+  frontend's primary source) and `item_common` list. `api_db` asserts the
+  field on the decompressed page.
+
+- Fix the `init_db` admin seed to not pin id=1 (`NotSet`), so it survives
+  databases where the sequence has already handed out ids (e.g. after the
+  test harness rebuilt the tables).
+
 - Seed the item-type taxonomy in the demo data: the frontend's left panel
   groups items by `item_type` (via `/api/item_type/get/list_all`) — with an
   empty table the panel had no entries and no markers were selectable. The
