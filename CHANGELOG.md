@@ -18,6 +18,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Seed the item-type taxonomy in the demo data: the frontend's left panel
+  groups items by `item_type` (via `/api/item_type/get/list_all`) — with an
+  empty table the panel had no entries and no markers were selectable. The
+  seeder now creates 5 types (传送锚点/七天神像/秘境/宝箱/材料) plus the
+  `item_type_link` rows.
+
 - Fix the demo seed to actually render: areas now carry the real frontend
   codes (`A:MD:MENGDE` / `A:LY:LIYUE` / `A:DQ:1` — matched against
   `AREA_ADDITIONAL_CONFIG_MAP` and the dadian tiles), and markers use game
