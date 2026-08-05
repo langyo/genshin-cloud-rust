@@ -17,7 +17,8 @@ use _database::models::{
     common::history as history_model, common::score_stat as score_stat_model,
     icon::icon as icon_model, icon::icon_type_link as itl_model, item::item as item_model,
     item::item_type_link as item_type_link_model, marker::marker as marker_model,
-    marker::marker_item_link as mil_model, system::sys_action_log as action_log_model,
+    marker::marker_item_link as mil_model,
+    tag::tag as tag_model, tag::tag_type as tag_type_model, system::sys_action_log as action_log_model,
     system::sys_user as sys_user_model, system::sys_user_device as device_model,
 };
 use _functions::functions::api::{
@@ -264,6 +265,8 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(itl_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
         ddl_without_foreign_keys(mil_model::Entity),
+        ddl_without_foreign_keys(tag_model::Entity),
+        ddl_without_foreign_keys(tag_type_model::Entity),
     ];
     recreate_tables_fklless(
         db,
@@ -1103,3 +1106,4 @@ async fn area_and_item_doc_business_assertions() {
         "item carries its typeIdList (Java ItemVo)"
     );
 }
+
