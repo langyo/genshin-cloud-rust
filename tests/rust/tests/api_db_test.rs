@@ -282,6 +282,8 @@ async fn area_and_item_doc_business_assertions() {
             "marker",
             "marker_item_link",
             "marker_punctuate",
+            "tag",
+            "tag_type",
         ],
         &ddls,
     )
