@@ -135,12 +135,12 @@ pub async fn do_tweak(
             match tweak.prop {
                 _utils::models::marker::MarkerTweakConfigPropEnum::Content => {
                     if let Some(v) = &tweak.meta.replace {
-                        am.content = Set(v.clone());
+                        am.content = Set(Some(v.clone()));
                     } else if let Some(_utils::models::marker::TweakValue::String(s)) =
                         &tweak.meta.value
                     {
                         // 简化处理：若值为 String -> 替换
-                        am.content = Set(s.clone());
+                        am.content = Set(Some(s.clone()));
                     }
                 },
                 _utils::models::marker::MarkerTweakConfigPropEnum::Title => {
@@ -351,7 +351,7 @@ pub async fn do_add_single(
 
         marker_title: Set(Some(payload.marker_title)),
         position: Set(payload.position),
-        content: Set(payload.content.unwrap_or_default()),
+        content: Set(payload.content),
         picture: Set(payload.picture),
         marker_creator_id: Set(payload.marker_creator_id),
         picture_creator_id: Set(payload.picture_creator_id),
@@ -382,7 +382,7 @@ pub async fn do_update_single(
     let mut am: marker_model::ActiveModel = m.into();
 
     if let Some(content) = payload.content {
-        am.content = Set(content);
+        am.content = Set(Some(content));
     }
     if let Some(extra) = payload.extra {
         am.extra = Set(Some(serde_json::to_value(extra)?));

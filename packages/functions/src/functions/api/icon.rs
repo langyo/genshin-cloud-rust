@@ -142,9 +142,10 @@ pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<Com
 pub(crate) async fn icon_tag_map(
     db: &sea_orm::DatabaseConnection,
 ) -> Result<std::collections::HashMap<i64, String>> {
+    use _database::models::tag::tag as tag_model;
     let mut map = std::collections::HashMap::new();
-    for icon in icon_model::Entity::find_safety().all(db).await? {
-        map.insert(icon.id, icon.tag);
+    for t in tag_model::Entity::find_safety().all(db).await? {
+        map.entry(t.icon_id).or_insert(t.tag);
     }
     Ok(map)
 }

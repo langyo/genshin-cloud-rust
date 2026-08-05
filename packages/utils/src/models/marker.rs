@@ -32,7 +32,7 @@ pub struct MarkerVO {
     pub marker_stamp: Option<String>,
     pub marker_title: Option<String>,
     pub position: String,
-    pub content: String,
+    pub content: Option<String>,
     pub picture: Option<String>,
     pub marker_creator_id: i64,
     pub picture_creator_id: Option<i64>,
@@ -96,7 +96,7 @@ pub struct MarkerRequest {
     /// 形如 "{x},{y}" 的格式，其中 x 与 y 均为浮点数文本
     pub position: String,
     /// 点位说明
-    pub content: String,
+    pub content: Option<String>,
     /// 点位图片
     pub picture: Option<String>,
     /// 点位初始标记者

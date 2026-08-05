@@ -538,7 +538,7 @@ async fn area_and_item_doc_business_assertions() {
         marker_stamp: Set(None),
         marker_title: Set(Some("Test Marker".into())),
         position: Set("1.0,2.0".into()),
-        content: Set(String::new()),
+        content: Set(Some(String::new())),
         picture: Set(None),
         marker_creator_id: Set(1),
         picture_creator_id: Set(None),
