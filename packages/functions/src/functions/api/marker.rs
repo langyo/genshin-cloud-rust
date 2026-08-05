@@ -39,7 +39,7 @@ pub(crate) async fn marker_item_map(
         return Ok(map);
     }
     let mut links: Vec<mil_model::Model> = Vec::new();
-    for chunk in marker_ids.chunks(1000) {
+    for chunk in marker_ids.chunks(10000) {
         links.extend(
             mil_model::Entity::find_safety()
                 .filter(mil_model::Column::MarkerId.is_in(chunk))
@@ -50,7 +50,7 @@ pub(crate) async fn marker_item_map(
     let item_ids: Vec<i64> = links.iter().map(|l| l.item_id).collect();
     let mut item_icon_ids: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
     if !item_ids.is_empty() {
-        for chunk in item_ids.chunks(1000) {
+        for chunk in item_ids.chunks(10000) {
             for it in item_model::Entity::find_safety()
                 .filter(item_model::Column::Id.is_in(chunk))
                 .all(db)
@@ -412,7 +412,7 @@ pub async fn do_get_id(
     // 如果提供了 item_id_list，则从 marker_item_link 收集 marker id
     if let Some(item_ids) = payload.item_id_list {
         let mut links: Vec<mil_model::Model> = Vec::new();
-        for chunk in item_ids.chunks(1000) {
+        for chunk in item_ids.chunks(10000) {
             links.extend(
                 mil_model::Entity::find_safety()
                     .filter(mil_model::Column::ItemId.is_in(chunk))
@@ -446,7 +446,7 @@ pub async fn do_get_list_by_info(
     // 重用 do_get_id 的逻辑获取 id 列表，然后查询模型
     let ids = if let Some(item_ids) = payload.item_id_list {
         let mut links: Vec<mil_model::Model> = Vec::new();
-        for chunk in item_ids.chunks(1000) {
+        for chunk in item_ids.chunks(10000) {
             links.extend(
                 mil_model::Entity::find_safety()
                     .filter(mil_model::Column::ItemId.is_in(chunk))
