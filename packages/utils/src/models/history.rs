@@ -61,5 +61,6 @@ pub struct HistoryItemVO {
 #[serde(rename_all = "camelCase")]
 pub struct HistoryListResponse {
     pub total: usize,
+    #[serde(rename = "record")]
     pub items: Vec<HistoryItemVO>,
 }

@@ -70,6 +70,7 @@ pub struct MarkerIdListResponse {
 #[serde(rename_all = "camelCase")]
 pub struct MarkerListResponse {
     pub total: usize,
+    #[serde(rename = "record")]
     pub items: Vec<MarkerVO>,
 }
 
@@ -77,6 +78,7 @@ pub struct MarkerListResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerItemsResponse {
+    #[serde(rename = "record")]
     pub items: Vec<MarkerVO>,
 }
 

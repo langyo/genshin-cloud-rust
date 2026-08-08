@@ -56,6 +56,7 @@ pub struct IconVO {
 #[serde(rename_all = "camelCase")]
 pub struct IconListResponse {
     pub total: i64,
+    #[serde(rename = "record")]
     pub items: Vec<IconVO>,
 }
 

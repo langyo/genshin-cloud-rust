@@ -49,5 +49,6 @@ pub struct IconTypeVO {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconTypeListResponse {
+    #[serde(rename = "record")]
     pub items: Vec<IconTypeVO>,
 }

@@ -111,6 +111,7 @@ pub struct NoticeVO {
 #[serde(rename_all = "camelCase")]
 pub struct NoticeListResponse {
     pub total: i64,
+    #[serde(rename = "record")]
     pub items: Vec<NoticeVO>,
 }
 

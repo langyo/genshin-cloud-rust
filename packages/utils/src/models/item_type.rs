@@ -22,6 +22,7 @@ pub struct ItemTypeVO {
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeListResponse {
     pub total: i64,
+    #[serde(rename = "record")]
     pub items: Vec<ItemTypeVO>,
 }
 

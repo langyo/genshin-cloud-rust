@@ -180,6 +180,7 @@ pub struct ItemVO {
 #[serde(rename_all = "camelCase")]
 pub struct ItemListResponse {
     pub total: i64,
+    #[serde(rename = "record")]
     pub items: Vec<ItemVO>,
 }
 
