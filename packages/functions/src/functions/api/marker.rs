@@ -146,6 +146,63 @@ pub(crate) fn model_to_vo_doc(
     model_to_vo(it.clone(), item_map, linkage_map)
 }
 
+/// 文本类 tweak 的"新值"：meta.replace 优先，其次 meta.value 中的 String。
+/// 注意 TweakMeta 没有 remove/preserve 字段，trim/remove 的待处理子串同样取此值。
+fn tweak_text_value(tweak: &_utils::models::marker::MarkerTweakConfig) -> Option<String> {
+    if let Some(v) = &tweak.meta.replace {
+        return Some(v.clone());
+    }
+    if let Some(_utils::models::marker::TweakValue::String(s)) = &tweak.meta.value {
+        return Some(s.clone());
+    }
+    None
+}
+
+/// 按 tweak 类型计算文本字段（title/content）的新值（最小可行语义）：
+/// - Replace：整值替换（默认，前端标题编辑）
+/// - Prepend / Append：新值 + 原值 / 原值 + 新值
+/// - RemoveLeft / RemoveRight：移除边缘（前缀/后缀）的单次子串，未命中则保持原值
+/// - TrimLeft / TrimRight：剥离边缘的重复子串
+/// - ReplaceRegex：当前无 regex 依赖，保持忽略（与 item_list 分支一致）
+/// - ���ɸ��ı��ֶ������壬���� None�����޸ģ���
+fn apply_text_tweak(
+    tweak: &_utils::models::marker::MarkerTweakConfig,
+    origin: Option<String>,
+) -> Option<String> {
+    let origin = origin.unwrap_or_default();
+    match tweak.marker_tweak_config_type {
+        _utils::models::marker::MarkerTweakConfigTypeEnum::Replace => tweak_text_value(tweak),
+        _utils::models::marker::MarkerTweakConfigTypeEnum::Prepend => {
+            tweak_text_value(tweak).map(|v| v + &origin)
+        },
+        _utils::models::marker::MarkerTweakConfigTypeEnum::Append => {
+            tweak_text_value(tweak).map(|v| origin + &v)
+        },
+        _utils::models::marker::MarkerTweakConfigTypeEnum::RemoveLeft => tweak_text_value(tweak)
+            .map(|v| {
+                origin
+                    .strip_prefix(v.as_str())
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| origin.clone())
+            }),
+        _utils::models::marker::MarkerTweakConfigTypeEnum::RemoveRight => tweak_text_value(tweak)
+            .map(|v| {
+                origin
+                    .strip_suffix(v.as_str())
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| origin.clone())
+            }),
+        _utils::models::marker::MarkerTweakConfigTypeEnum::TrimLeft => {
+            tweak_text_value(tweak).map(|v| origin.trim_start_matches(v.as_str()).to_owned())
+        },
+        _utils::models::marker::MarkerTweakConfigTypeEnum::TrimRight => {
+            tweak_text_value(tweak).map(|v| origin.trim_end_matches(v.as_str()).to_owned())
+        },
+        // ReplaceRegex 等其余类型：对文本字段暂不支持，忽略
+        _ => None,
+    }
+}
+
 pub async fn do_tweak(
     auth: AuthInfo,
     payloads: Vec<MarkerTweakRequest>,
@@ -164,28 +221,20 @@ pub async fn do_tweak(
                 continue;
             }
             let m = m.unwrap();
+            let content = m.content.clone();
+            let marker_title = m.marker_title.clone();
             let mut am: marker_model::ActiveModel = m.into();
 
             for tweak in payload.tweaks.iter() {
                 match tweak.prop {
                     _utils::models::marker::MarkerTweakConfigPropEnum::Content => {
-                        if let Some(v) = &tweak.meta.replace {
-                            am.content = Set(Some(v.clone()));
-                        } else if let Some(_utils::models::marker::TweakValue::String(s)) =
-                            &tweak.meta.value
-                        {
-                            // 简化处理：若值为 String -> 替换
-                            am.content = Set(Some(s.clone()));
+                        if let Some(new_content) = apply_text_tweak(tweak, content.clone()) {
+                            am.content = Set(Some(new_content));
                         }
                     },
                     _utils::models::marker::MarkerTweakConfigPropEnum::Title => {
-                        if let Some(v) = &tweak.meta.replace {
-                            am.marker_title = Set(Some(v.clone()));
-                        } else if let Some(_utils::models::marker::TweakValue::String(s)) =
-                            &tweak.meta.value
-                        {
-                            // 前端标题更新发 meta.value（字符串，与 replace 同语义）
-                            am.marker_title = Set(Some(s.clone()));
+                        if let Some(new_title) = apply_text_tweak(tweak, marker_title.clone()) {
+                            am.marker_title = Set(Some(new_title));
                         }
                     },
                     _utils::models::marker::MarkerTweakConfigPropEnum::Position => {
@@ -631,19 +680,20 @@ pub async fn do_get_list_by_info(
     // (104K markers would create 104K bind params).
     let item_map = marker_item_map(db, &ids).await?;
     let linkage_map = marker_linkage_map(db, &ids).await?;
-    let mut creator_ids: HashSet<i64> = HashSet::new();
+    let mut user_ids: HashSet<i64> = HashSet::new();
     let mut arr = Vec::new();
     for chunk in ids.chunks(10000) {
         let items = marker_model::Entity::find_safety()
             .filter(marker_model::Column::Id.is_in(chunk))
             .all(db)
             .await?;
-        creator_ids.extend(items.iter().filter_map(|m| m.creator_id));
+        user_ids.extend(items.iter().filter_map(|m| m.creator_id));
+        user_ids.extend(items.iter().filter_map(|m| m.updater_id));
         for it in items {
             arr.push(model_to_vo(it, &item_map, Some(&linkage_map)));
         }
     }
-    let users = super::sys_user_map(db, &creator_ids).await?;
+    let users = super::sys_user_map(db, &user_ids).await?;
     Ok(CommonResponse::new(Ok(arr)).with_users(users))
 }
 
@@ -673,12 +723,13 @@ pub async fn do_get_list_by_id(
     let ids: Vec<i64> = items.iter().map(|m| m.id).collect();
     let item_map = marker_item_map(db, &ids).await?;
     let linkage_map = marker_linkage_map(db, &ids).await?;
-    let creator_ids: HashSet<i64> = items.iter().filter_map(|m| m.creator_id).collect();
+    let mut user_ids: HashSet<i64> = items.iter().filter_map(|m| m.creator_id).collect();
+    user_ids.extend(items.iter().filter_map(|m| m.updater_id));
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
         arr.push(model_to_vo(it, &item_map, Some(&linkage_map)));
     }
-    let users = super::sys_user_map(db, &creator_ids).await?;
+    let users = super::sys_user_map(db, &user_ids).await?;
     Ok(CommonResponse::new(Ok(arr)).with_users(users))
 }
 
@@ -699,12 +750,13 @@ pub async fn do_get_page(
     let ids: Vec<i64> = items.iter().map(|m| m.id).collect();
     let item_map = marker_item_map(db, &ids).await?;
     let linkage_map = marker_linkage_map(db, &ids).await?;
-    let creator_ids: HashSet<i64> = items.iter().filter_map(|m| m.creator_id).collect();
+    let mut user_ids: HashSet<i64> = items.iter().filter_map(|m| m.creator_id).collect();
+    user_ids.extend(items.iter().filter_map(|m| m.updater_id));
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
         arr.push(model_to_vo(it, &item_map, Some(&linkage_map)));
     }
-    let users = super::sys_user_map(db, &creator_ids).await?;
+    let users = super::sys_user_map(db, &user_ids).await?;
     Ok(CommonResponse::new(Ok(MarkerListResponse {
         total: total as usize,
         size: Some(size as i64),

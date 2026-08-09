@@ -81,6 +81,7 @@ pub async fn do_update(
 
         am.icon_id = Set(resolve_icon_id(p.icon_id, p.icon_tag.as_deref()).await?);
 
+        am.name = Set(p.name);
         am.area_id = Set(p.area_id);
         am.default_content = Set(Some(p.default_content));
         am.default_count = Set(p.default_count as i32);
@@ -95,6 +96,35 @@ pub async fn do_update(
         item_model::Entity::update_safety(am)?
             .exec(&DB_CONN.wait().pg_conn)
             .await?;
+
+        // 类型关联：先逻辑删除旧 link，再按新 typeIdList 插入
+        let old_links = link_model::Entity::find_safety()
+            .filter(link_model::Column::ItemId.eq(p.id))
+            .all(&DB_CONN.wait().pg_conn)
+            .await?;
+        for link in old_links {
+            let mut lam: link_model::ActiveModel = link.into();
+            lam.del_flag = Set(true);
+            link_model::Entity::update_safety(lam)?
+                .exec(&DB_CONN.wait().pg_conn)
+                .await?;
+        }
+        for t in p.type_id_list {
+            let now = chrono::Utc::now().naive_utc();
+            let active = link_model::ActiveModel {
+                version: Set(0),
+                id: NotSet,
+                create_time: Set(now),
+                update_time: Set(None),
+                creator_id: Set(None),
+                updater_id: Set(None),
+                del_flag: Set(false),
+
+                type_id: Set(t),
+                item_id: Set(p.id),
+            };
+            active.insert(&DB_CONN.wait().pg_conn).await?;
+        }
     }
     Ok(CommonResponse::new(Ok(())))
 }
@@ -107,7 +137,9 @@ pub async fn do_get_list(
     let db = &DB_CONN.wait().pg_conn;
     let mut query = item_model::Entity::find_safety();
 
-    if let Some(area_ids) = payload.area_id_list {
+    if let Some(area_ids) = payload.area_id_list
+        && !area_ids.is_empty()
+    {
         query = query.filter(item_model::Column::AreaId.is_in(area_ids));
     }
     if let Some(name) = payload.name {

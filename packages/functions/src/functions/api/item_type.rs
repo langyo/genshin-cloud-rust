@@ -97,12 +97,14 @@ pub async fn do_get_list(
 ) -> Result<CommonResponse<ItemTypeListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
     let mut query = item_type_model::Entity::find_safety();
-    if !self_flag {
-        // typeIdList 语义（物品类型树）：[-1] 返回根类型（parent_id=-1 或自指顶层），
-        // [nodeId] 返回其子级（parent_id IN typeIdList）
-        if let Some(type_list) = payload.type_id_list
-            && !type_list.is_empty()
-        {
+    // self=1 查询子级（前端唯一用法，body typeIdList: [-1] 取根 / [nodeId] 取子级）；
+    // self=0 按 Java 语义查询自身（typeIdList 含 -1 不过滤，否则 id IN typeIdList）
+    if let Some(type_list) = payload.type_id_list
+        && !type_list.is_empty()
+    {
+        if self_flag {
+            // typeIdList 语义（物品类型树）：[-1] 返回根类型（parent_id=-1 或自指顶层），
+            // [nodeId] 返回其子级（parent_id IN typeIdList）
             if type_list.contains(&-1) {
                 query = query.filter(
                     sea_orm::Condition::any()
@@ -115,6 +117,8 @@ pub async fn do_get_list(
             } else {
                 query = query.filter(item_type_model::Column::ParentId.is_in(type_list));
             }
+        } else if !type_list.contains(&-1) {
+            query = query.filter(item_type_model::Column::Id.is_in(type_list));
         }
     }
 
