@@ -55,6 +55,9 @@ pub struct ItemAddRequest {
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 物品名称
     pub name: String,
     /// 排序
@@ -84,6 +87,9 @@ pub struct ItemUpdateData {
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 物品 ID
     pub id: i64,
     /// 物品名称

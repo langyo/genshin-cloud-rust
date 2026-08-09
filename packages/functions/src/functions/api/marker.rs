@@ -147,11 +147,21 @@ pub async fn do_tweak(
                     _utils::models::marker::MarkerTweakConfigPropEnum::Title => {
                         if let Some(v) = &tweak.meta.replace {
                             am.marker_title = Set(Some(v.clone()));
+                        } else if let Some(_utils::models::marker::TweakValue::String(s)) =
+                            &tweak.meta.value
+                        {
+                            // 前端标题更新发 meta.value（字符串，与 replace 同语义）
+                            am.marker_title = Set(Some(s.clone()));
                         }
                     },
                     _utils::models::marker::MarkerTweakConfigPropEnum::Position => {
                         if let Some(v) = &tweak.meta.replace {
                             am.position = Set(v.clone());
+                        } else if let Some(_utils::models::marker::TweakValue::String(s)) =
+                            &tweak.meta.value
+                        {
+                            // 前端拖拽移动发 meta.value（"x,y" 字符串，与 replace 同语义）
+                            am.position = Set(s.clone());
                         }
                     },
                     _utils::models::marker::MarkerTweakConfigPropEnum::VideoPath => {
@@ -234,7 +244,12 @@ fn parse_item_entries(item_list: &[Option<serde_json::Value>]) -> Vec<(i64, i32)
                 }
             },
             serde_json::Value::Object(obj) => {
-                if let Some(id) = obj.get("id").and_then(|x| x.as_i64()) {
+                // 兼容 `id`（tweak 裸 id 对象）与 `itemId`（前端 MarkerItemLinkVo）
+                if let Some(id) = obj
+                    .get("id")
+                    .or_else(|| obj.get("itemId"))
+                    .and_then(|x| x.as_i64())
+                {
                     let count = obj.get("count").and_then(|x| x.as_i64()).unwrap_or(1) as i32;
                     ret.push((id, count));
                 }
@@ -357,6 +372,7 @@ pub async fn do_add_single(
 ) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
+    let db = &DB_CONN.wait().pg_conn;
 
     let active = marker_model::ActiveModel {
         version: Set(0),
@@ -382,7 +398,11 @@ pub async fn do_add_single(
         ..Default::default()
     };
 
-    let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    let res = active.insert(db).await?;
+    // item_list 落库（parse_item_entries 支持裸数字 / {id|itemId, count}）
+    for (item_id, count) in parse_item_entries(&payload.item_list) {
+        insert_item_link(db, res.id, item_id, count).await?;
+    }
     // 直接返回裸 id，前端期望 data 为 number
     Ok(CommonResponse::new(Ok(res.id)))
 }
@@ -419,6 +439,22 @@ pub async fn do_update_single(
     }
 
     marker_model::Entity::update_safety(am)?.exec(db).await?;
+
+    // item_list 全量替换（先删后插）：编辑表单始终携带完整 itemList，
+    // 空列表视为清空全部关联。
+    let existing = mil_model::Entity::find_safety()
+        .filter(mil_model::Column::MarkerId.eq(payload.id))
+        .all(db)
+        .await?;
+    for link in existing {
+        mil_model::Entity::delete_safety(link.into())?
+            .exec(db)
+            .await?;
+    }
+    for (item_id, count) in parse_item_entries(&payload.item_list) {
+        insert_item_link(db, payload.id, item_id, count).await?;
+    }
+
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }
 

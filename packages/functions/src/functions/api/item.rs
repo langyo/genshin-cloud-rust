@@ -16,8 +16,8 @@ use _utils::{
     jwt::AuthInfo,
     models::{
         item::{
-            CopyCountResponse, ItemAddRequest, ItemAddResponse, ItemFilterRequest,
-            ItemListResponse, ItemUpdateData, ItemVO,
+            CopyCountResponse, ItemAddRequest, ItemFilterRequest, ItemListResponse, ItemUpdateData,
+            ItemVO,
         },
         wrapper::CommonResponse,
     },
@@ -82,11 +82,12 @@ pub async fn do_update(
         let item = item.ok_or(anyhow!("Item not found"))?;
         let mut am: item_model::ActiveModel = item.into();
 
+        am.icon_id = Set(resolve_icon_id(p.icon_id, p.icon_tag.as_deref()).await?);
+
         am.area_id = Set(p.area_id);
         am.default_content = Set(Some(p.default_content));
         am.default_count = Set(p.default_count as i32);
         am.default_refresh_time = Set(p.default_refresh_time.unwrap_or(0));
-        am.icon_id = Set(p.icon_id);
         am.icon_style_type = Set(p.icon_style_type);
         am.hidden_flag = Set(p.hidden_flag);
         if let Some(si) = p.sort_index {
@@ -306,12 +307,11 @@ pub async fn do_copy_to_area(
     Ok(CommonResponse::new(Ok(CopyCountResponse { count })))
 }
 
-pub async fn do_add(
-    auth: AuthInfo,
-    payload: ItemAddRequest,
-) -> Result<CommonResponse<ItemAddResponse>> {
+pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
+
+    let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
 
     let active = item_model::ActiveModel {
         version: Set(0),
@@ -327,7 +327,7 @@ pub async fn do_add(
         default_refresh_time: Set(payload.default_refresh_time.unwrap_or(0)),
         default_content: Set(Some(payload.default_content)),
         default_count: Set(payload.default_count as i32),
-        icon_id: Set(payload.icon_id),
+        icon_id: Set(icon_id),
         icon_style_type: Set(payload.icon_style_type),
         hidden_flag: Set(payload.hidden_flag),
         sort_index: Set(payload.sort_index.unwrap_or(0) as i32),
@@ -355,5 +355,20 @@ pub async fn do_add(
         active.insert(&DB_CONN.wait().pg_conn).await?;
     }
 
-    Ok(CommonResponse::new(Ok(ItemAddResponse { id: new_id })))
+    Ok(CommonResponse::new(Ok(new_id)))
+}
+
+/// 前端以 `iconTag`（tag 表标签名）而非 `iconId` 提交图标：
+/// iconId 为 0 且提供了 iconTag 时，按 tag 名查 tag 表得到 icon_id；
+/// 查不到则回退 0（不强制失败，保持与旧行为一致）。
+async fn resolve_icon_id(icon_id: i64, icon_tag: Option<&str>) -> Result<i64> {
+    if icon_id != 0 {
+        return Ok(icon_id);
+    }
+    let Some(tag) = icon_tag.filter(|t| !t.is_empty()) else {
+        return Ok(0);
+    };
+    Ok(super::icon::icon_id_by_tag(&DB_CONN.wait().pg_conn, tag)
+        .await?
+        .unwrap_or(0))
 }

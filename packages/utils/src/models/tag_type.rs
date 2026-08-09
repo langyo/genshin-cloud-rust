@@ -50,7 +50,13 @@ pub struct TagTypeListRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeVO {
+    /// 乐观锁版本号（前端编辑时随行提交，用于乐观锁校验）
+    pub version: i64,
     pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
     pub name: String,
     pub parent_id: i64,
     pub is_final: bool,

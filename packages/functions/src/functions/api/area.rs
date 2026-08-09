@@ -11,16 +11,13 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
-        AreaAddRequest, AreaAddResponse, AreaListRequest, AreaListResponse, AreaSingleResponse,
-        AreaUpdateRequest, AreaVO, wrapper::CommonResponse,
+        AreaAddRequest, AreaListRequest, AreaListResponse, AreaUpdateRequest, AreaVO,
+        wrapper::CommonResponse,
     },
 };
 
 // 新增地区
-pub async fn do_add(
-    auth: AuthInfo,
-    payload: AreaAddRequest,
-) -> Result<CommonResponse<AreaAddResponse>> {
+pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
 
@@ -45,7 +42,7 @@ pub async fn do_add(
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
-    Ok(CommonResponse::new(Ok(AreaAddResponse { id: res.id })))
+    Ok(CommonResponse::new(Ok(res.id)))
 }
 
 // 更新地区
@@ -122,33 +119,31 @@ pub async fn do_list(
 }
 
 // 获取单个
-pub async fn do_get(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<AreaSingleResponse>> {
+pub async fn do_get(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<AreaVO>> {
     let icon_tag_map = super::icon::icon_tag_map(&DB_CONN.wait().pg_conn).await?;
     let item = area_model::Entity::find_safety_by_id(area_id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
     let item = item.ok_or(anyhow!("Area not found"))?;
-    Ok(CommonResponse::new(Ok(AreaSingleResponse {
-        item: AreaVO {
-            version: item.version,
-            id: item.id,
-            create_time: item.create_time.and_utc().timestamp_millis() as f64,
-            update_time: item
-                .update_time
-                .map(|dt| dt.and_utc().timestamp_millis() as f64),
-            creator_id: item.creator_id,
-            updater_id: item.updater_id,
-            name: item.name,
-            code: item.code,
-            content: item.content,
-            icon_tag: Some(icon_tag_map.get(&item.icon_id).cloned().unwrap_or_default()),
-            icon_id: item.icon_id,
-            parent_id: item.parent_id,
-            is_final: item.is_final,
-            hidden_flag: item.hidden_flag,
-            sort_index: item.sort_index,
-            special_flag: item.special_flag,
-        },
+    Ok(CommonResponse::new(Ok(AreaVO {
+        version: item.version,
+        id: item.id,
+        create_time: item.create_time.and_utc().timestamp_millis() as f64,
+        update_time: item
+            .update_time
+            .map(|dt| dt.and_utc().timestamp_millis() as f64),
+        creator_id: item.creator_id,
+        updater_id: item.updater_id,
+        name: item.name,
+        code: item.code,
+        content: item.content,
+        icon_tag: Some(icon_tag_map.get(&item.icon_id).cloned().unwrap_or_default()),
+        icon_id: item.icon_id,
+        parent_id: item.parent_id,
+        is_final: item.is_final,
+        hidden_flag: item.hidden_flag,
+        sort_index: item.sort_index,
+        special_flag: item.special_flag,
     })))
 }
 

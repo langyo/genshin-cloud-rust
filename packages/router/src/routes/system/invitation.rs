@@ -68,7 +68,11 @@ pub struct InvitationConsumeRequest {
     /// 邀请码
     pub code: String,
     /// 用户名
-    pub username: String,
+    pub username: Option<String>,
+    /// 初始密码（缺省时由后端生成）
+    pub password: Option<String>,
+    /// 昵称
+    pub nickname: Option<String>,
 }
 
 /// 检查用户邀请数据的请求参数
@@ -151,7 +155,15 @@ pub async fn consume(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationConsumeRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::system::invitation::do_consume(auth, payload.code).await {
+    match _functions::functions::system::invitation::do_consume(
+        auth,
+        payload.code,
+        payload.username,
+        payload.password,
+        payload.nickname,
+    )
+    .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
     }

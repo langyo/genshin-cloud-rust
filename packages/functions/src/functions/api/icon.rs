@@ -146,3 +146,16 @@ pub(crate) async fn icon_tag_map(
     }
     Ok(map)
 }
+
+/// tag 名 -> icon_id 映射（前端 iconTag → 图标 ID，取第一条匹配）。
+pub(crate) async fn icon_id_by_tag(
+    db: &sea_orm::DatabaseConnection,
+    tag: &str,
+) -> Result<Option<i64>> {
+    use _database::models::tag::tag as tag_model;
+    let t = tag_model::Entity::find_safety()
+        .filter(tag_model::Column::Tag.eq(tag))
+        .one(db)
+        .await?;
+    Ok(t.map(|t| t.icon_id))
+}

@@ -120,7 +120,7 @@ pub async fn rename(
     }
 }
 
-/// 恢复为上次存档（返回存档数据）
+/// 恢复为上次存档（删除最新一条，返回剩余最新一条存档）
 /// DELETE /archive/restore/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn restore(
@@ -128,8 +128,7 @@ pub async fn restore(
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
-        .await
+    match _functions::functions::system::archive::do_restore_slot(user_id, slot_index as i32).await
     {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),

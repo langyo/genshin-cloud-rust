@@ -1,7 +1,7 @@
 //! Action log business logic — mirrors Java `SysActionLogService`.
 
 use anyhow::Result;
-use sea_orm::{QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{QueryFilter, QueryOrder, QuerySelect, prelude::*};
 
 use _database::{DB_CONN, models::system::sys_action_log as log_model};
 use _utils::{
@@ -20,10 +20,15 @@ fn action_to_str(action: SystemActionLogAction) -> String {
 }
 
 /// List action logs with optional filtering by user_id / action.
+#[allow(clippy::too_many_arguments)]
 pub async fn do_list(
     _auth: AuthInfo,
     user_id: Option<i64>,
     action: Option<i64>,
+    device_id: Option<String>,
+    ipv4: Option<String>,
+    is_error: Option<bool>,
+    sort: Option<Vec<String>>,
     size: u64,
     current: u64,
 ) -> Result<CommonResponse<serde_json::Value>> {
@@ -46,6 +51,45 @@ pub async fn do_list(
             },
         };
         query = query.filter(log_model::Column::Action.eq(enum_val));
+    }
+    if let Some(did) = device_id
+        && !did.is_empty()
+    {
+        query = query.filter(log_model::Column::DeviceId.contains(did));
+    }
+    if let Some(ip) = ipv4
+        && !ip.is_empty()
+    {
+        query = query.filter(log_model::Column::Ipv4.contains(ip));
+    }
+    if let Some(err) = is_error {
+        query = query.filter(log_model::Column::IsError.eq(err));
+    }
+
+    // 排序：wire 字符串（"createTime+" / "createTime-" 等）→ 列 + 方向。
+    if let Some(sorts) = sort {
+        for s in sorts {
+            let (column, desc) = match s.as_str() {
+                "createTime+" => (log_model::Column::CreateTime, false),
+                "createTime-" => (log_model::Column::CreateTime, true),
+                "deviceId+" => (log_model::Column::DeviceId, false),
+                "deviceId-" => (log_model::Column::DeviceId, true),
+                "id+" => (log_model::Column::Id, false),
+                "id-" => (log_model::Column::Id, true),
+                "ipv4+" => (log_model::Column::Ipv4, false),
+                "ipv4-" => (log_model::Column::Ipv4, true),
+                "isError+" => (log_model::Column::IsError, false),
+                "isError-" => (log_model::Column::IsError, true),
+                "updateTime+" => (log_model::Column::UpdateTime, false),
+                "updateTime-" => (log_model::Column::UpdateTime, true),
+                _ => continue,
+            };
+            query = if desc {
+                query.order_by(column, sea_orm::Order::Desc)
+            } else {
+                query.order_by(column, sea_orm::Order::Asc)
+            };
+        }
     }
 
     let total = query.clone().count(db).await?;

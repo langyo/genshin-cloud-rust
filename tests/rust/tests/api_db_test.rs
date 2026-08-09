@@ -380,7 +380,7 @@ async fn area_and_item_doc_business_assertions() {
     .expect("area do_add")
     .data
     .expect("area add payload");
-    let new_id = add_resp.id;
+    let new_id = add_resp;
     assert!(new_id != seeded_area_id, "new area gets a distinct id");
 
     let after = area_fns::do_list(

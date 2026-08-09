@@ -65,8 +65,10 @@ pub struct NoticeAddRequest {
     pub content: String,
     pub sort_index: i64,
     pub title: String,
-    pub valid_time_end: Option<f64>,
-    pub valid_time_start: Option<f64>,
+    /// 有效期：接受毫秒数字或 ISO 字符串（前端 el-date-picker 默认序列化为 ISO 字符串）
+    pub valid_time_end: Option<serde_json::Value>,
+    /// 有效期：接受毫秒数字或 ISO 字符串（前端 el-date-picker 默认序列化为 ISO 字符串）
+    pub valid_time_start: Option<serde_json::Value>,
 }
 
 /// 公告列表查询请求
@@ -91,8 +93,10 @@ pub struct NoticeUpdateRequest {
     pub id: i64,
     pub sort_index: i64,
     pub title: String,
-    pub valid_time_end: Option<f64>,
-    pub valid_time_start: Option<f64>,
+    /// 有效期：接受毫秒数字或 ISO 字符串（前端 el-date-picker 默认序列化为 ISO 字符串）
+    pub valid_time_end: Option<serde_json::Value>,
+    /// 有效期：接受毫秒数字或 ISO 字符串（前端 el-date-picker 默认序列化为 ISO 字符串）
+    pub valid_time_start: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

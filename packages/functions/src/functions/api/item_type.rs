@@ -100,7 +100,12 @@ pub async fn do_get_list(
     let db = &DB_CONN.wait().pg_conn;
     let mut query = item_type_model::Entity::find_safety();
     if let Some(type_list) = payload.type_id_list {
-        query = query.filter(item_type_model::Column::Id.is_in(type_list));
+        // -1 表示"全部/无类型"（前端根节点固定传 [-1] 拉全量），
+        // 只对正数 ID 做过滤，避免 id IN (-1) 恒空。
+        let ids: Vec<i64> = type_list.into_iter().filter(|&t| t > 0).collect();
+        if !ids.is_empty() {
+            query = query.filter(item_type_model::Column::Id.is_in(ids));
+        }
     }
 
     let size = payload.page.size.unwrap_or(10) as u64;
@@ -170,7 +175,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
 }
 
 // 新增类型
-pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<i64> {
+pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
     // name 在逻辑上为必填
@@ -197,5 +202,5 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<i64> 
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
-    Ok(res.id)
+    Ok(CommonResponse::new(Ok(res.id)))
 }

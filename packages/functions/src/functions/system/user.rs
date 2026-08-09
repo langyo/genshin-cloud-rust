@@ -64,7 +64,7 @@ pub async fn do_register_qq(
     role_id: Option<SystemUserRole>,
     username: String,
     password: String,
-    qq: String,
+    qq: Option<String>,
 ) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
 
@@ -81,7 +81,7 @@ pub async fn do_register_qq(
         username: Set(username),
         password: Set(_utils::bcrypt::generate_storage_password(&password)?),
         nickname: Set(None),
-        qq: Set(Some(qq)),
+        qq: Set(qq),
         phone: Set(None),
         logo: Set(logo),
         role_id: Set(role_id.unwrap_or(SystemUserRole::MapUser)),

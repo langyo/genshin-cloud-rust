@@ -23,6 +23,29 @@ use _utils::{
     },
 };
 
+/// 解析有效期字段：接受毫秒数字或 ISO/普通时间字符串，解析失败回退 `now`。
+/// 返回 `None` 表示前端未传该字段（保持原值/NULL）。
+fn parse_valid_time(
+    value: Option<&serde_json::Value>,
+    now: chrono::NaiveDateTime,
+) -> Option<chrono::NaiveDateTime> {
+    value.map(|v| {
+        if let Some(ms) = v.as_f64() {
+            chrono::DateTime::from_timestamp_millis(ms as i64)
+                .map(|dt| dt.naive_utc())
+                .unwrap_or(now)
+        } else if let Some(s) = v.as_str() {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .map(|dt| dt.naive_utc())
+                .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f"))
+                .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S"))
+                .unwrap_or(now)
+        } else {
+            now
+        }
+    })
+}
+
 pub async fn do_update_notice(
     auth: AuthInfo,
     payload: NoticeUpdateRequest,
@@ -36,9 +59,25 @@ pub async fn do_update_notice(
     let n = n.ok_or(anyhow!("Notice not found"))?;
     let mut am: notice_model::ActiveModel = n.into();
 
-    // NoticeUpdateRequest 包含具体字段
+    let now = Utc::now().naive_utc();
+    // NoticeUpdateRequest 包含具体字段：全量写回（含频道/排序/有效期）
     am.title = Set(payload.title);
     am.content = Set(Some(payload.content));
+    am.channel = Set(ChannelWrapper(
+        payload
+            .channel
+            .iter()
+            .map(|c| {
+                serde_json::to_string(c)
+                    .unwrap_or_default()
+                    .trim_matches('"')
+                    .to_string()
+            })
+            .collect(),
+    ));
+    am.sort_index = Set(payload.sort_index as i32);
+    am.valid_time_start = Set(parse_valid_time(payload.valid_time_start.as_ref(), now));
+    am.valid_time_end = Set(parse_valid_time(payload.valid_time_end.as_ref(), now));
 
     notice_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(())))
@@ -183,16 +222,8 @@ pub async fn do_add_notice(
                 .collect(),
         )),
         sort_index: Set(payload.sort_index as i32),
-        valid_time_start: Set(payload.valid_time_start.map(|ts| {
-            chrono::DateTime::from_timestamp_millis(ts as i64)
-                .map(|dt| dt.naive_utc())
-                .unwrap_or(now)
-        })),
-        valid_time_end: Set(payload.valid_time_end.map(|ts| {
-            chrono::DateTime::from_timestamp_millis(ts as i64)
-                .map(|dt| dt.naive_utc())
-                .unwrap_or(now)
-        })),
+        valid_time_start: Set(parse_valid_time(payload.valid_time_start.as_ref(), now)),
+        valid_time_end: Set(parse_valid_time(payload.valid_time_end.as_ref(), now)),
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;

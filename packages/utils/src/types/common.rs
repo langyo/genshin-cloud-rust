@@ -123,7 +123,7 @@ impl<'de> Deserialize<'de> for HistoryEditType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum HistoryOperationType {
     /// 地区
@@ -138,6 +138,49 @@ pub enum HistoryOperationType {
     /// 点位
     #[sea_orm(num_value = 4)]
     Position = 4,
+}
+
+/// 序列化为**数字**（Java 契约；前端 `type: 4|3` 数字消费）。
+impl Serialize for HistoryOperationType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_i32(*self as i32)
+    }
+}
+
+/// 反序列化同时接受数字（新契约/前端）与枚举名（旧数据）。
+impl<'de> Deserialize<'de> for HistoryOperationType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let v = serde_json::Value::deserialize(deserializer)?;
+        match v {
+            serde_json::Value::Number(n) => match n.as_i64() {
+                Some(1) => Ok(HistoryOperationType::Area),
+                Some(2) => Ok(HistoryOperationType::Icon),
+                Some(3) => Ok(HistoryOperationType::Item),
+                Some(4) => Ok(HistoryOperationType::Position),
+                _ => Err(serde::de::Error::custom(format!(
+                    "unknown operationType {n}"
+                ))),
+            },
+            serde_json::Value::String(s) => match s.as_str() {
+                "Area" => Ok(HistoryOperationType::Area),
+                "Icon" => Ok(HistoryOperationType::Icon),
+                "Item" => Ok(HistoryOperationType::Item),
+                "Position" => Ok(HistoryOperationType::Position),
+                _ => Err(serde::de::Error::custom(format!(
+                    "unknown operationType {s}"
+                ))),
+            },
+            _ => Err(serde::de::Error::custom(
+                "operationType must be an integer or enum name",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
