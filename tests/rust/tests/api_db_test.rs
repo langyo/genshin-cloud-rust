@@ -909,12 +909,12 @@ async fn area_and_item_doc_business_assertions() {
     .expect("get score data ok");
     let samples = data.as_array().expect("samples array");
     assert_eq!(samples.len(), 1, "one sample returned");
-    let fields = samples[0]["data"]["fields"]
+    let chars = samples[0]["data"]["chars"]
         .as_object()
-        .expect("fields map");
+        .expect("chars map");
     assert_eq!(
-        fields.get("content").and_then(|v| v.as_i64()).unwrap_or(0),
-        4,
+        chars.get("content").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        4.0,
         "score read back from content"
     );
 
@@ -1118,3 +1118,4 @@ async fn area_and_item_doc_business_assertions() {
         "item carries its typeIdList (Java ItemVo)"
     );
 }
+
