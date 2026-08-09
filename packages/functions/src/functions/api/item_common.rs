@@ -147,6 +147,7 @@ pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResp
         });
     }
     iap_model::Entity::insert_many(models).exec(db).await?;
+    super::binary_doc::invalidate_item_doc_cache().await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
@@ -164,5 +165,6 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
         .filter(iap_model::Column::ItemId.eq(id))
         .exec(db)
         .await?;
+    super::binary_doc::invalidate_item_doc_cache().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }

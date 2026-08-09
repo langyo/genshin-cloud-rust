@@ -113,6 +113,11 @@ pub async fn do_update(
         5 => _utils::types::SystemUserRole::Visitor,
         _ => return Err(anyhow!("Invalid role id")),
     };
+    // 安全边界：邀请码不可授予 Admin（管理员仅能由 Admin 直接注册/提拔）。
+    // 显式拒绝而非静默降级，防止低权限操作者通过邀请码扩散管理员权限。
+    if role == SystemUserRole::Admin {
+        return Err(anyhow!("Admin role cannot be granted via invitation code"));
+    }
     let access_policy = serde_json::to_value(AccessPolicyList(access_policy))?;
 
     if let Some(c) = code {
@@ -264,7 +269,11 @@ pub async fn do_consume(
         qq: Set(None),
         phone: Set(None),
         logo: Set(None),
-        role_id: Set(inv.role_id.unwrap_or(SystemUserRole::MapUser)),
+        // 防御：历史遗留的 Admin 邀请码（新逻辑已禁止创建）消费时降级为 MapUser
+        role_id: Set(inv
+            .role_id
+            .filter(|r| *r != SystemUserRole::Admin)
+            .unwrap_or(SystemUserRole::MapUser)),
         access_policy: Set(inv
             .access_policy
             .as_ref()

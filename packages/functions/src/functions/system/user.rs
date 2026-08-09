@@ -65,6 +65,25 @@ pub async fn do_register_qq(
 ) -> Result<CommonResponse<i64>> {
     let db = &DB_CONN.wait().pg_conn;
 
+    // 注册前查重（应用层）：username / qq 任一已被占用（未软删）则拒绝，
+    // 防公开接口批量注册重复账号；数据库唯一索引作为最终兜底。
+    let username_taken = sys_user_model::Entity::find_safety()
+        .filter(sys_user_model::Column::Username.eq(&username))
+        .count(db)
+        .await?
+        > 0;
+    if username_taken {
+        return Err(anyhow!("username exists"));
+    }
+    let qq_taken = sys_user_model::Entity::find_safety()
+        .filter(sys_user_model::Column::Qq.eq(&qq))
+        .count(db)
+        .await?
+        > 0;
+    if qq_taken {
+        return Err(anyhow!("qq exists"));
+    }
+
     let now = Utc::now().naive_utc();
     let am = sys_user_model::ActiveModel {
         version: Set(0),
@@ -98,17 +117,18 @@ pub async fn do_get_info(auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
         .await?;
     let m = m.ok_or(anyhow!("User not found"))?;
 
-    // 权限校验：本人可读全部字段；非本人需 MapManager 及以上（role_id <= MapManager，
-    // Admin=0 / MapManager=1），否则只返回公开字段，不下发 qq/phone/accessPolicy。
+    // 字段权限：
+    // - Admin：放行全部字段（qq/phone/accessPolicy）；
+    // - 本人：可见自己的 qq/phone，但 accessPolicy 仅 Admin 可见；
+    // - 其他用户（含 MapManager）：只下发公开字段 + 基本字段（nickname/logo/roleId/remark）。
     let is_self = auth.info.id == user_id;
-    let is_manager = (auth.info.role_id as i32) <= (SystemUserRole::MapManager as i32);
-    if !is_self && !is_manager {
+    if auth.info.role_id != SystemUserRole::Admin {
         return Ok(SysUserVO {
             id: m.id,
             username: m.username,
             nickname: m.nickname,
-            qq: None,
-            phone: None,
+            qq: if is_self { m.qq } else { None },
+            phone: if is_self { m.phone } else { None },
             logo: m.logo,
             role_id: m.role_id,
             access_policy: Default::default(),
@@ -119,6 +139,8 @@ pub async fn do_get_info(auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
 }
 
 #[allow(clippy::too_many_arguments)]
+// 错误类型 (u16, String)：HTTP 状态码 + 消息。functions 包不依赖 axum，用
+// u16 而非 StatusCode，由 router 层透传转换（权限类错误 403，其余保持 500）。
 pub async fn do_update(
     auth: AuthInfo,
     id: i64,
@@ -129,17 +151,21 @@ pub async fn do_update(
     qq: Option<String>,
     remark: Option<String>,
     role_id: Option<SystemUserRole>,
-) -> Result<CommonResponse<()>> {
+) -> Result<CommonResponse<()>, (u16, String)> {
     let db = &DB_CONN.wait().pg_conn;
     // 权限校验：仅 Admin 可修改他人资料；普通用户只能改自己。
     let is_admin = auth.info.role_id == SystemUserRole::Admin;
     if !is_admin && auth.info.id != id {
-        return Err(anyhow!("Forbidden: only admins can update other users"));
+        return Err((
+            403,
+            "Forbidden: only admins can update other users".to_string(),
+        ));
     }
     let m = sys_user_model::Entity::find_safety_by_id(id)
         .one(db)
-        .await?;
-    let m = m.ok_or(anyhow!("User not found"))?;
+        .await
+        .map_err(|e| (500, e.to_string()))?;
+    let m = m.ok_or_else(|| (500, "User not found".to_string()))?;
     let mut am: sys_user_model::ActiveModel = m.into();
 
     if let Some(ap) = access_policy {
@@ -159,6 +185,17 @@ pub async fn do_update(
         am.phone = Set(Some(p));
     }
     if let Some(q) = qq {
+        // qq 唯一性（应用层）：改绑前查重，其他未软删用户已占用则拒绝。
+        let qq_taken = sys_user_model::Entity::find_safety()
+            .filter(sys_user_model::Column::Qq.eq(&q))
+            .filter(sys_user_model::Column::Id.ne(id))
+            .count(db)
+            .await
+            .map_err(|e| (500, e.to_string()))?
+            > 0;
+        if qq_taken {
+            return Err((409, "qq already exists".to_string()));
+        }
         am.qq = Set(Some(q));
     }
     if let Some(r) = remark {
@@ -171,7 +208,11 @@ pub async fn do_update(
         }
     }
 
-    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
+    sys_user_model::Entity::update_safety(am)
+        .map_err(|e| (500, e.to_string()))?
+        .exec(db)
+        .await
+        .map_err(|e| (500, e.to_string()))?;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -180,28 +221,37 @@ pub async fn do_update_password(
     user_id: i64,
     old_password: String,
     new_password: String,
-) -> Result<CommonResponse<()>> {
+) -> Result<CommonResponse<()>, (u16, String)> {
     let db = &DB_CONN.wait().pg_conn;
     // 权限校验：仅本人可凭旧密码改密；Admin 例外可改任意用户
     let is_admin = auth.info.role_id == SystemUserRole::Admin;
     if !is_admin && auth.info.id != user_id {
-        return Err(anyhow!(
-            "Forbidden: only the account owner can update password"
+        return Err((
+            403,
+            "Forbidden: only the account owner can update password".to_string(),
         ));
     }
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
-        .await?;
-    let m = m.ok_or(anyhow!("User not found"))?;
+        .await
+        .map_err(|e| (500, e.to_string()))?;
+    let m = m.ok_or_else(|| (500, "User not found".to_string()))?;
 
     // 校验旧密码，拒绝错误凭据
-    if !_utils::bcrypt::verify_password(old_password, m.password.clone())? {
-        return Err(anyhow!("Invalid old password"));
+    if !_utils::bcrypt::verify_password(old_password, m.password.clone())
+        .map_err(|e| (500, e.to_string()))?
+    {
+        return Err((500, "Invalid old password".to_string()));
     }
 
     let mut am: sys_user_model::ActiveModel = m.into();
-    am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)?);
-    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
+    am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)
+        .map_err(|e| (500, e.to_string()))?);
+    sys_user_model::Entity::update_safety(am)
+        .map_err(|e| (500, e.to_string()))?
+        .exec(db)
+        .await
+        .map_err(|e| (500, e.to_string()))?;
     Ok(CommonResponse::new(Ok(())))
 }
 

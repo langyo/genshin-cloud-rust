@@ -185,10 +185,12 @@ fn tweak_int_value(value: &_utils::models::marker::TweakValue) -> Option<i64> {
 ///   替换为 meta.replace（或 value），未命中返回 None（不修改）；test 缺失时按 Replace 整值替换
 /// - Replace：meta.test 存在时 replaceAll（origin 中所有 test 出现处 → 新值）；
 ///   test 缺失时整值替换（默认，前端标题编辑）
-/// - ReplaceRegex：无 regex 依赖，以字面量替换近似（test → 新值，全部出现），test 缺失忽略
+/// - ReplaceRegex：regex 仅为 Cargo.lock 传递依赖（无 crate 声明），以字面量替换近似
+///   （test → 新值，全部出现），与前端真实正则预览不一致已知
 /// - Prepend / Append：新值 + 原值 / 原值 + 新值
 /// - RemoveLeft / RemoveRight：从开头/结尾移除 test（或 value）子串一次，未命中保持原值
-/// - TrimLeft / TrimRight：剥离开头/结尾重复出现的 test（或 value）子串
+/// - TrimLeft / TrimRight：无 test/value 时去除首/尾空白字符（对应 Java StrUtil.trimStart/End）；
+///   有 test（或 value）时剥离开头/结尾重复出现的该子串
 /// - 其余类型（InsertIfAbsent/InsertOrUpdate/Merge 等）对文本字段无意义，返回 None（不修改）
 fn apply_text_tweak(
     tweak: &_utils::models::marker::MarkerTweakConfig,
@@ -220,7 +222,8 @@ fn apply_text_tweak(
                 tweak_text_value(tweak)
             }
         },
-        // 无 regex 依赖：以字面量字符串替换近似（与 Replace 带 test 时语义一致）
+        // regex 仅存在于 Cargo.lock 传递依赖中（functions 未声明），无法使用真实正则，
+        // 以字面量字符串替换近似（与 Replace 带 test 时语义一致）；前端正则预览不一致已知
         _utils::models::marker::MarkerTweakConfigTypeEnum::ReplaceRegex => {
             if let Some(needle) = tweak_text_needle(tweak)
                 && !needle.is_empty()
@@ -256,10 +259,18 @@ fn apply_text_tweak(
             )
         },
         _utils::models::marker::MarkerTweakConfigTypeEnum::TrimLeft => {
-            tweak_text_needle(tweak).map(|n| origin.trim_start_matches(n.as_str()).to_owned())
+            // 前端发空 meta 时按空白字符剥离（对应 Java StrUtil.trimStart）
+            match tweak_text_needle(tweak) {
+                Some(n) if !n.is_empty() => Some(origin.trim_start_matches(n.as_str()).to_owned()),
+                _ => Some(origin.trim_start().to_owned()),
+            }
         },
         _utils::models::marker::MarkerTweakConfigTypeEnum::TrimRight => {
-            tweak_text_needle(tweak).map(|n| origin.trim_end_matches(n.as_str()).to_owned())
+            // 前端发空 meta 时按空白字符剥离（对应 Java StrUtil.trimEnd）
+            match tweak_text_needle(tweak) {
+                Some(n) if !n.is_empty() => Some(origin.trim_end_matches(n.as_str()).to_owned()),
+                _ => Some(origin.trim_end().to_owned()),
+            }
         },
         // InsertIfAbsent / InsertOrUpdate / Merge 等其余类型：对文本字段无意义，忽略
         _ => None,

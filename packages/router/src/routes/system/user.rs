@@ -201,7 +201,12 @@ pub async fn update(
             payload.role_id,
         )
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+        .map_err(|(code, msg)| {
+            (
+                StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                msg,
+            )
+        })?,
     )
     .into_response())
 }
@@ -223,7 +228,12 @@ pub async fn update_password(
     Ok(Json(
         do_update_password(auth, payload.user_id, payload.old_password, new_pw)
             .await
-            .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+            .map_err(|(code, msg)| {
+                (
+                    StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                    msg,
+                )
+            })?,
     )
     .into_response())
 }

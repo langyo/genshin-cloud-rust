@@ -113,12 +113,17 @@ pub async fn do_update(
             vec![p.id]
         };
         if target_ids.is_empty() {
+            // editSame=1 按名称查不到同名物品（名称已改名/新建）：视为空成功，不报错
+            if edit_same {
+                continue;
+            }
             return Err(anyhow!("Item not found"));
         }
         for id in target_ids {
             update_one(db, id, &p).await?;
         }
     }
+    super::binary_doc::invalidate_item_doc_cache().await;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -301,6 +306,7 @@ pub async fn do_join_type(
         };
         active.insert(db).await?;
     }
+    super::binary_doc::invalidate_item_doc_cache().await;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -351,6 +357,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
         .filter(link_model::Column::ItemId.eq(id))
         .exec(db)
         .await?;
+    super::binary_doc::invalidate_item_doc_cache().await;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -410,6 +417,7 @@ pub async fn do_copy_to_area(
             new_ids.push(new_id);
         }
     }
+    super::binary_doc::invalidate_item_doc_cache().await;
     Ok(CommonResponse::new(Ok(new_ids)))
 }
 
@@ -473,6 +481,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
         }
     }
 
+    super::binary_doc::invalidate_item_doc_cache().await;
     Ok(CommonResponse::new(Ok(new_id)))
 }
 
