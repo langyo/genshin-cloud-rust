@@ -81,6 +81,13 @@ pub async fn do_list(
     if let Some(parent_id) = payload.parent_id {
         query = query.filter(tag_type_model::Column::ParentId.eq(parent_id));
     }
+    // 前端以 typeIdList 过滤：[-1] 表示根/全部（不过滤），[nodeId] 按 id IN 过滤
+    if let Some(type_list) = payload.type_id_list {
+        let ids: Vec<i64> = type_list.into_iter().filter(|&t| t > 0).collect();
+        if !ids.is_empty() {
+            query = query.filter(tag_type_model::Column::Id.is_in(ids));
+        }
+    }
 
     let size = payload.page.size.unwrap_or(10) as u64;
     let current = payload.page.current.unwrap_or(1);

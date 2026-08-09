@@ -21,6 +21,8 @@ pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonRes
     auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
 
+    let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
+
     let active = area_model::ActiveModel {
         version: Set(0),
         id: NotSet,
@@ -33,7 +35,7 @@ pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonRes
         name: Set(payload.name),
         code: Set(payload.code),
         content: Set(payload.content),
-        icon_id: Set(payload.icon_id),
+        icon_id: Set(icon_id),
         parent_id: Set(payload.parent_id),
         is_final: Set(payload.is_final),
         hidden_flag: Set(payload.hidden_flag),
@@ -60,7 +62,8 @@ pub async fn do_update(
     am.name = Set(payload.area.name);
     am.code = Set(payload.area.code);
     am.content = Set(payload.area.content);
-    am.icon_id = Set(payload.area.icon_id);
+    am.icon_id =
+        Set(resolve_icon_id(payload.area.icon_id, payload.area.icon_tag.as_deref()).await?);
     am.parent_id = Set(payload.area.parent_id);
     am.is_final = Set(payload.area.is_final);
     am.hidden_flag = Set(payload.area.hidden_flag);
@@ -160,4 +163,19 @@ pub async fn do_delete(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<Em
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
+}
+
+/// 前端以 `iconTag`（tag 表标签名）而非 `iconId` 提交图标：
+/// iconId 为 0 且提供了 iconTag 时，按 tag 名查 tag 表得到 icon_id；
+/// 查不到则回退 0（不强制失败，保持与旧行为一致）。
+async fn resolve_icon_id(icon_id: i64, icon_tag: Option<&str>) -> Result<i64> {
+    if icon_id != 0 {
+        return Ok(icon_id);
+    }
+    let Some(tag) = icon_tag.filter(|t| !t.is_empty()) else {
+        return Ok(0);
+    };
+    Ok(super::icon::icon_id_by_tag(&DB_CONN.wait().pg_conn, tag)
+        .await?
+        .unwrap_or(0))
 }

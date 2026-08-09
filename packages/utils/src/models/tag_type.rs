@@ -39,6 +39,8 @@ pub struct TagTypeListRequest {
     pub name: Option<String>,
     /// 父级分类 ID
     pub parent_id: Option<i64>,
+    /// 分类 ID 列表（前端契约 typeIdList；-1 表示根/全部，仅对正数 ID 过滤）
+    pub type_id_list: Option<Vec<i64>>,
     /// 是否遍历子类型
     pub is_traverse: Option<bool>,
 

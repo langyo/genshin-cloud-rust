@@ -15,10 +15,7 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
-        item::{
-            CopyCountResponse, ItemAddRequest, ItemFilterRequest, ItemListResponse, ItemUpdateData,
-            ItemVO,
-        },
+        item::{ItemAddRequest, ItemFilterRequest, ItemListResponse, ItemUpdateData, ItemVO},
         wrapper::CommonResponse,
     },
 };
@@ -250,11 +247,12 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
 }
 
 // 复制物品到指定地区（简单实现：复制记录并关联相同类型）
+// 前端契约 RListLong：返回新复制出的物品 ID 列表（data: number[]）。
 pub async fn do_copy_to_area(
     auth: AuthInfo,
     area_id: i64,
     payload: Vec<i64>,
-) -> Result<CommonResponse<CopyCountResponse>> {
+) -> Result<CommonResponse<Vec<i64>>> {
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
@@ -267,7 +265,7 @@ pub async fn do_copy_to_area(
     }
 
     auth.require_non_anonymous()?;
-    let mut count = 0i64;
+    let mut new_ids = Vec::with_capacity(payload.len());
     for id in payload {
         if let Some(item) = item_model::Entity::find_safety_by_id(id)
             .one(&DB_CONN.wait().pg_conn)
@@ -301,10 +299,10 @@ pub async fn do_copy_to_area(
                 };
                 active.insert(&DB_CONN.wait().pg_conn).await?;
             }
-            count += 1;
+            new_ids.push(new_id);
         }
     }
-    Ok(CommonResponse::new(Ok(CopyCountResponse { count })))
+    Ok(CommonResponse::new(Ok(new_ids)))
 }
 
 pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonResponse<i64>> {

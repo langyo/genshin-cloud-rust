@@ -51,8 +51,8 @@ pub enum InvitationSort {
 pub struct InvitationUpdateRequest {
     /// 权限策略
     pub access_policy: Vec<AccessPolicyItemEnum>,
-    /// 邀请码
-    pub code: String,
+    /// 邀请码（新增时缺省，由后端生成）
+    pub code: Option<String>,
     /// 备注
     pub remark: String,
     /// 角色列表
@@ -125,8 +125,10 @@ pub async fn update(
     match _functions::functions::system::invitation::do_update(
         auth,
         payload.code,
-        Some(payload.role_id),
-        Some(payload.remark),
+        payload.username,
+        payload.role_id,
+        payload.remark,
+        payload.access_policy,
     )
     .await
     {

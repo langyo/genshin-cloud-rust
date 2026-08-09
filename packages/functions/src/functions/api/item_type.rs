@@ -34,9 +34,9 @@ pub async fn do_update(
     let item = item.ok_or(anyhow!("ItemType not found"))?;
 
     let mut am: item_type_model::ActiveModel = item.into();
-    // icon_tag -> icon_id
 
-    am.icon_id = Set(payload.icon_id);
+    // icon_tag -> icon_id
+    am.icon_id = Set(resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?);
 
     if let Some(name) = payload.name {
         am.name = Set(name);
@@ -183,6 +183,8 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
 
     let sort_index = payload.sort_index.unwrap_or(0) as i32;
 
+    let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
+
     let active = item_type_model::ActiveModel {
         version: Set(0),
         id: NotSet,
@@ -192,7 +194,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
         updater_id: Set(None),
         del_flag: Set(false),
 
-        icon_id: Set(payload.icon_id),
+        icon_id: Set(icon_id),
         name: Set(name),
         content: Set(payload.content),
         parent_id: Set(payload.parent_id),
@@ -203,4 +205,19 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
     Ok(CommonResponse::new(Ok(res.id)))
+}
+
+/// 前端以 `iconTag`（tag 表标签名）而非 `iconId` 提交图标：
+/// iconId 为 0 且提供了 iconTag 时，按 tag 名查 tag 表得到 icon_id；
+/// 查不到则回退 0（不强制失败，保持与旧行为一致）。
+async fn resolve_icon_id(icon_id: i64, icon_tag: Option<&str>) -> Result<i64> {
+    if icon_id != 0 {
+        return Ok(icon_id);
+    }
+    let Some(tag) = icon_tag.filter(|t| !t.is_empty()) else {
+        return Ok(0);
+    };
+    Ok(super::icon::icon_id_by_tag(&DB_CONN.wait().pg_conn, tag)
+        .await?
+        .unwrap_or(0))
 }

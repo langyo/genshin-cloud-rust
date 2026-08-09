@@ -7,6 +7,8 @@ use sea_orm::{
     prelude::*,
 };
 
+use std::collections::HashSet;
+
 use _database::{
     DB_CONN,
     models::common::notice::{self as notice_model, ChannelWrapper},
@@ -16,21 +18,22 @@ use _utils::{
     jwt::AuthInfo,
     models::{
         notice::{
-            NoticeAddRequest, NoticeAddResponse, NoticeChannel, NoticeListRequest,
-            NoticeListResponse, NoticeUpdateRequest, NoticeVO,
+            NoticeAddRequest, NoticeChannel, NoticeListRequest, NoticeListResponse,
+            NoticeUpdateRequest, NoticeVO,
         },
         wrapper::CommonResponse,
     },
 };
 
 /// 解析有效期字段：接受毫秒数字或 ISO/普通时间字符串，解析失败回退 `now`。
-/// 返回 `None` 表示前端未传该字段（保持原值/NULL）。
+/// `None` 或 JSON `null` 表示前端传空（保持原值/NULL），不回退 `now`。
 fn parse_valid_time(
     value: Option<&serde_json::Value>,
     now: chrono::NaiveDateTime,
 ) -> Option<chrono::NaiveDateTime> {
-    value.map(|v| {
-        if let Some(ms) = v.as_f64() {
+    match value {
+        None | Some(serde_json::Value::Null) => None,
+        Some(v) => Some(if let Some(ms) = v.as_f64() {
             chrono::DateTime::from_timestamp_millis(ms as i64)
                 .map(|dt| dt.naive_utc())
                 .unwrap_or(now)
@@ -42,8 +45,8 @@ fn parse_valid_time(
                 .unwrap_or(now)
         } else {
             now
-        }
-    })
+        }),
+    }
 }
 
 pub async fn do_update_notice(
@@ -125,6 +128,7 @@ pub async fn do_get_notice_list(
     }
 
     let total = rows.len();
+    let creator_ids: HashSet<i64> = rows.iter().filter_map(|n| n.creator_id).collect();
     let size = payload.page.size.unwrap_or(10) as usize;
     let current = payload.page.current.unwrap_or(1) as usize;
     let offset = (current.saturating_sub(1)) * size;
@@ -178,7 +182,8 @@ pub async fn do_get_notice_list(
         items: arr,
         size: Some(size as i64),
     };
-    Ok(CommonResponse::new(Ok(payload)))
+    let users = super::sys_user_map(db, &creator_ids).await?;
+    Ok(CommonResponse::new(Ok(payload)).with_users(users))
 }
 
 pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
@@ -195,7 +200,7 @@ pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<
 pub async fn do_add_notice(
     auth: AuthInfo,
     payload: NoticeAddRequest,
-) -> Result<CommonResponse<NoticeAddResponse>> {
+) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
     let active = notice_model::ActiveModel {
@@ -227,5 +232,5 @@ pub async fn do_add_notice(
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
-    Ok(CommonResponse::new(Ok(NoticeAddResponse { id: res.id })))
+    Ok(CommonResponse::new(Ok(res.id)))
 }

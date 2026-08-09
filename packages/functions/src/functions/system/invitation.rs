@@ -63,37 +63,80 @@ pub async fn do_list(
     }))))
 }
 
-/// Update an invitation by code (e.g. change role_id or remark).
+/// Update or create an invitation by code (upsert semantics).
+/// `code` 为空时生成新邀请码并插入；`code` 有值时按 code 更新，查不到则插入。
 pub async fn do_update(
     _auth: AuthInfo,
-    code: String,
-    role_id: Option<i64>,
-    remark: Option<String>,
+    code: Option<String>,
+    username: String,
+    role_id: i64,
+    remark: String,
+    access_policy: Vec<_utils::types::AccessPolicyItemEnum>,
 ) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
 
-    let inv = inv_model::Entity::find_safety()
-        .filter(inv_model::Column::Code.eq(&code))
-        .one(db)
-        .await?
-        .ok_or_else(|| anyhow!("Invitation not found"))?;
-    let mut am: inv_model::ActiveModel = inv.into();
-    if let Some(r) = role_id {
-        // role_id is stored as an enum; set via numeric value
-        am.role_id = Set(Some(match r {
-            0 => _utils::types::SystemUserRole::Admin,
-            1 => _utils::types::SystemUserRole::MapNeigui,
-            2 => _utils::types::SystemUserRole::MapManager,
-            3 => _utils::types::SystemUserRole::MapPunctuate,
-            4 => _utils::types::SystemUserRole::MapUser,
-            5 => _utils::types::SystemUserRole::Visitor,
-            _ => return Err(anyhow!("Invalid role id")),
-        }));
+    let role = match role_id {
+        0 => _utils::types::SystemUserRole::Admin,
+        1 => _utils::types::SystemUserRole::MapNeigui,
+        2 => _utils::types::SystemUserRole::MapManager,
+        3 => _utils::types::SystemUserRole::MapPunctuate,
+        4 => _utils::types::SystemUserRole::MapUser,
+        5 => _utils::types::SystemUserRole::Visitor,
+        _ => return Err(anyhow!("Invalid role id")),
+    };
+    let access_policy = serde_json::to_value(AccessPolicyList(access_policy))?;
+
+    if let Some(c) = code {
+        if let Some(inv) = inv_model::Entity::find_safety()
+            .filter(inv_model::Column::Code.eq(&c))
+            .one(db)
+            .await?
+        {
+            let mut am: inv_model::ActiveModel = inv.into();
+            am.username = Set(username);
+            am.role_id = Set(Some(role));
+            am.remark = Set(Some(remark));
+            am.access_policy = Set(Some(access_policy));
+            inv_model::Entity::update_safety(am)?.exec(db).await?;
+            return Ok(CommonResponse::new(Ok(())));
+        }
+
+        let now = Utc::now().naive_utc();
+        let am = inv_model::ActiveModel {
+            version: Set(0),
+            id: NotSet,
+            create_time: Set(now),
+            update_time: Set(None),
+            creator_id: Set(None),
+            updater_id: Set(None),
+            del_flag: Set(false),
+            code: Set(c),
+            username: Set(username),
+            role_id: Set(Some(role)),
+            remark: Set(Some(remark)),
+            access_policy: Set(Some(access_policy)),
+        };
+        inv_model::Entity::insert(am).exec(db).await?;
+        return Ok(CommonResponse::new(Ok(())));
     }
-    if let Some(rm) = remark {
-        am.remark = Set(Some(rm));
-    }
-    inv_model::Entity::update_safety(am)?.exec(db).await?;
+
+    let code = &uuid::Uuid::new_v4().simple().to_string()[..8];
+    let now = Utc::now().naive_utc();
+    let am = inv_model::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        code: Set(code.to_string()),
+        username: Set(username),
+        role_id: Set(Some(role)),
+        remark: Set(Some(remark)),
+        access_policy: Set(Some(access_policy)),
+    };
+    inv_model::Entity::insert(am).exec(db).await?;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -136,6 +179,18 @@ pub async fn do_consume(
     let password = password
         .filter(|p| !p.is_empty())
         .unwrap_or_else(|| format!("{}_{}", code, now.and_utc().timestamp()));
+
+    // 用户已存在：不重复创建，返回 EXISTING 供前端直接走登录
+    if let Some(user) = sys_user_model::Entity::find_safety()
+        .filter(sys_user_model::Column::Username.eq(&username))
+        .one(db)
+        .await?
+    {
+        return Ok(CommonResponse::new(Ok(serde_json::json!({
+            "userId": user.id,
+            "result": "EXISTING",
+        }))));
+    }
 
     let user_am = sys_user_model::ActiveModel {
         version: Set(0),

@@ -15,6 +15,9 @@ pub struct AreaRequest {
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 父级地区 ID
     /// 无父级则为 -1
     pub parent_id: i64,

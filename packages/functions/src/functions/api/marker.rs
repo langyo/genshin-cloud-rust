@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 use _database::{
     DB_CONN, models::item::item as item_model, models::marker::marker as marker_model,
-    models::marker::marker_item_link as mil_model,
+    models::marker::marker_item_link as mil_model, models::marker::marker_linkage as linkage_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -70,11 +70,43 @@ pub(crate) async fn marker_item_map(
     Ok(map)
 }
 
+/// 批量读取点位归属的连线组（`marker_linkage` 的 from_id/to_id），
+/// 返回 marker_id → group_id（同一 marker 命中多组时取第一条）。避免逐点查询的 N+1。
+pub(crate) async fn marker_linkage_map(
+    db: &sea_orm::DatabaseConnection,
+    marker_ids: &[i64],
+) -> Result<std::collections::HashMap<i64, String>> {
+    let mut map: std::collections::HashMap<i64, String> = std::collections::HashMap::new();
+    if marker_ids.is_empty() {
+        return Ok(map);
+    }
+    let mut links: Vec<linkage_model::Model> = Vec::new();
+    for chunk in marker_ids.chunks(1000) {
+        links.extend(
+            linkage_model::Entity::find_safety()
+                .filter(
+                    sea_orm::Condition::any()
+                        .add(linkage_model::Column::FromId.is_in(chunk))
+                        .add(linkage_model::Column::ToId.is_in(chunk)),
+                )
+                .all(db)
+                .await?,
+        );
+    }
+    for l in links {
+        let gid = l.group_id;
+        map.entry(l.from_id).or_insert_with(|| gid.clone());
+        map.entry(l.to_id).or_insert_with(|| gid.clone());
+    }
+    Ok(map)
+}
+
 /// 批量调整点位数据，目前实现常用字段的替换/更新逻辑：
 /// 对于复杂的 item_list 调整暂时跳过（可在后续增强）。
 fn model_to_vo(
     it: marker_model::Model,
     item_map: &std::collections::HashMap<i64, Vec<MarkerItemLinkVo>>,
+    linkage_map: Option<&std::collections::HashMap<i64, String>>,
 ) -> MarkerVO {
     MarkerVO {
         version: it.version,
@@ -98,8 +130,8 @@ fn model_to_vo(
         hidden_flag: it.hidden_flag,
         extra: it.extra,
         item_list: item_map.get(&it.id).cloned().unwrap_or_default(),
-        // marker 域接口暂未查询 marker_linkage，恒为 None
-        linkage_id: None,
+        // 列表接口传入 marker_id → group_id map 回填；tweak 等场景可传 None
+        linkage_id: linkage_map.and_then(|m| m.get(&it.id).cloned()),
     }
 }
 
@@ -108,8 +140,9 @@ fn model_to_vo(
 pub(crate) fn model_to_vo_doc(
     it: &marker_model::Model,
     item_map: &std::collections::HashMap<i64, Vec<MarkerItemLinkVo>>,
+    linkage_map: Option<&std::collections::HashMap<i64, String>>,
 ) -> MarkerVO {
-    model_to_vo(it.clone(), item_map)
+    model_to_vo(it.clone(), item_map, linkage_map)
 }
 
 pub async fn do_tweak(
@@ -226,7 +259,7 @@ pub async fn do_tweak(
             .all(db)
             .await?;
         for it in items {
-            arr.push(model_to_vo(it, &item_map));
+            arr.push(model_to_vo(it, &item_map, None));
         }
     }
     Ok(CommonResponse::new(Ok(arr)))
@@ -528,17 +561,21 @@ pub async fn do_get_list_by_info(
     // Chunk the IDs to avoid exceeding sqlx's 65535 parameter limit
     // (104K markers would create 104K bind params).
     let item_map = marker_item_map(db, &ids).await?;
+    let linkage_map = marker_linkage_map(db, &ids).await?;
+    let mut creator_ids: HashSet<i64> = HashSet::new();
     let mut arr = Vec::new();
     for chunk in ids.chunks(10000) {
         let items = marker_model::Entity::find_safety()
             .filter(marker_model::Column::Id.is_in(chunk))
             .all(db)
             .await?;
+        creator_ids.extend(items.iter().filter_map(|m| m.creator_id));
         for it in items {
-            arr.push(model_to_vo(it, &item_map));
+            arr.push(model_to_vo(it, &item_map, Some(&linkage_map)));
         }
     }
-    Ok(CommonResponse::new(Ok(arr)))
+    let users = super::sys_user_map(db, &creator_ids).await?;
+    Ok(CommonResponse::new(Ok(arr)).with_users(users))
 }
 
 pub async fn do_get_list_by_id(
@@ -566,11 +603,14 @@ pub async fn do_get_list_by_id(
         .await?;
     let ids: Vec<i64> = items.iter().map(|m| m.id).collect();
     let item_map = marker_item_map(db, &ids).await?;
+    let linkage_map = marker_linkage_map(db, &ids).await?;
+    let creator_ids: HashSet<i64> = items.iter().filter_map(|m| m.creator_id).collect();
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
-        arr.push(model_to_vo(it, &item_map));
+        arr.push(model_to_vo(it, &item_map, Some(&linkage_map)));
     }
-    Ok(CommonResponse::new(Ok(arr)))
+    let users = super::sys_user_map(db, &creator_ids).await?;
+    Ok(CommonResponse::new(Ok(arr)).with_users(users))
 }
 
 pub async fn do_get_page(
@@ -589,15 +629,19 @@ pub async fn do_get_page(
 
     let ids: Vec<i64> = items.iter().map(|m| m.id).collect();
     let item_map = marker_item_map(db, &ids).await?;
+    let linkage_map = marker_linkage_map(db, &ids).await?;
+    let creator_ids: HashSet<i64> = items.iter().filter_map(|m| m.creator_id).collect();
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
-        arr.push(model_to_vo(it, &item_map));
+        arr.push(model_to_vo(it, &item_map, Some(&linkage_map)));
     }
+    let users = super::sys_user_map(db, &creator_ids).await?;
     Ok(CommonResponse::new(Ok(MarkerListResponse {
         total: total as usize,
         size: Some(size as i64),
         items: arr,
-    })))
+    }))
+    .with_users(users))
 }
 
 pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<MarkerEmptyResponse>> {

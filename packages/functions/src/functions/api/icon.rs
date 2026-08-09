@@ -10,12 +10,13 @@ use sea_orm::{
 
 use _database::DB_CONN;
 use _database::models::icon::icon as icon_model;
+use _database::models::icon::icon_type_link as icon_type_link_model;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
         IconAddRequest, IconListRequest, IconUpdateRequest,
-        icon::{IconListResponse, IconSingleResponse, IconVO},
+        icon::{IconListResponse, IconVO},
         wrapper::CommonResponse,
     },
 };
@@ -53,13 +54,28 @@ pub async fn do_list(
     if let Some(creator) = payload.creator {
         query = query.filter(icon_model::Column::CreatorId.eq(creator));
     }
-    if let Some(ids) = payload.icon_list
+    // iconList（旧字段）与 iconIdList（前端契约）均生效
+    let id_list = payload.icon_list.or(payload.icon_id_list);
+    if let Some(ids) = id_list
         && !ids.is_empty()
     {
         query = query.filter(icon_model::Column::Id.is_in(ids));
     }
     if let Some(name) = payload.name {
         query = query.filter(icon_model::Column::Tag.contains(name));
+    }
+    // 按图标分类（icon_type_link）过滤：icon_id IN (SELECT icon_id FROM icon_type_link WHERE type_id IN ...)
+    if let Some(type_ids) = payload.type_id_list {
+        let icon_ids: Vec<i64> = icon_type_link_model::Entity::find_safety()
+            .filter(icon_type_link_model::Column::TypeId.is_in(type_ids))
+            .all(&DB_CONN.wait().pg_conn)
+            .await?
+            .into_iter()
+            .map(|l| l.icon_id)
+            .collect();
+        if !icon_ids.is_empty() {
+            query = query.filter(icon_model::Column::Id.is_in(icon_ids));
+        }
     }
 
     let total = query.clone().count(&DB_CONN.wait().pg_conn).await?;
@@ -88,20 +104,17 @@ pub async fn do_list(
     Ok(CommonResponse::new(Ok(payload)))
 }
 
-// 获取单个图标
-pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<IconSingleResponse>> {
+// 获取单个图标（前端契约 RIconVo：data 直接是 IconVO）
+pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<IconVO>> {
     let item = icon_model::Entity::find_safety_by_id(id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
     let item = item.ok_or(anyhow!("Icon not found"))?;
-    let payload = IconSingleResponse {
-        item: IconVO {
-            id: item.id,
-            name: item.tag,
-            url: item.url,
-        },
-    };
-    Ok(CommonResponse::new(Ok(payload)))
+    Ok(CommonResponse::new(Ok(IconVO {
+        id: item.id,
+        name: item.tag,
+        url: item.url,
+    })))
 }
 
 // 删除（软删除）

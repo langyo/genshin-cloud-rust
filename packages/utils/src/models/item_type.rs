@@ -62,6 +62,9 @@ pub struct ItemTypeAddRequest {
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 是否为末端地区
     #[serde(default)]
     pub is_final: bool,
@@ -84,6 +87,9 @@ pub struct ItemTypeUpdateData {
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 物品类型 ID
     pub id: i64,
     /// 是否为末端地区

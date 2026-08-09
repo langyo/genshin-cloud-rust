@@ -25,7 +25,7 @@ pub async fn do_register(
     role_id: Option<SystemUserRole>,
     username: String,
     password: String,
-) -> Result<CommonResponse<serde_json::Value>> {
+) -> Result<CommonResponse<i64>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let now = Utc::now().naive_utc();
@@ -50,9 +50,7 @@ pub async fn do_register(
     };
 
     let res = sys_user_model::Entity::insert(am).exec(db).await?;
-    Ok(CommonResponse::new(Ok(
-        serde_json::json!({"id": res.last_insert_id}),
-    )))
+    Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -65,7 +63,7 @@ pub async fn do_register_qq(
     username: String,
     password: String,
     qq: Option<String>,
-) -> Result<CommonResponse<serde_json::Value>> {
+) -> Result<CommonResponse<i64>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let now = Utc::now().naive_utc();
@@ -90,9 +88,7 @@ pub async fn do_register_qq(
     };
 
     let res = sys_user_model::Entity::insert(am).exec(db).await?;
-    Ok(CommonResponse::new(Ok(
-        serde_json::json!({"id": res.last_insert_id}),
-    )))
+    Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
 pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {

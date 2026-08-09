@@ -77,6 +77,7 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
             .await?;
         let ids: Vec<i64> = markers.iter().map(|m| m.id).collect();
         let item_map = super::marker::marker_item_map(db, &ids).await?;
+        let linkage_map = super::marker::marker_linkage_map(db, &ids).await?;
 
         // Group by hidden_flag (BTreeMap → sorted ascending)
         let mut groups: BTreeMap<i32, Vec<&marker_model::Model>> = BTreeMap::new();
@@ -101,7 +102,9 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
                         // frontend parser.
                         let vos: Vec<_> = page_markers
                             .iter()
-                            .map(|m| super::marker::model_to_vo_doc(m, &item_map))
+                            .map(|m| {
+                                super::marker::model_to_vo_doc(m, &item_map, Some(&linkage_map))
+                            })
                             .collect();
                         let (compressed, md5_hex) = serialize_compress_md5(&vos)?;
                         Ok(CachedPage {
@@ -126,7 +129,7 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
                 let page = get_or_compute(key.clone(), async {
                     let vos: Vec<_> = group_markers
                         .iter()
-                        .map(|m| super::marker::model_to_vo_doc(m, &item_map))
+                        .map(|m| super::marker::model_to_vo_doc(m, &item_map, Some(&linkage_map)))
                         .collect();
                     let (compressed, md5_hex) = serialize_compress_md5(&vos)?;
                     Ok(CachedPage {
