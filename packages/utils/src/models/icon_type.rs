@@ -9,6 +9,7 @@ pub struct IconTypeBaseRequest {
     /// 父级分类 ID（-1 为根分类）
     pub parent_id: i64,
     /// 是否为末端类型
+    #[serde(default)]
     pub is_final: bool,
 }
 

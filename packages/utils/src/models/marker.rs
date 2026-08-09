@@ -44,6 +44,10 @@ pub struct MarkerVO {
     /// 点位物品关联（`marker_item_link`），前端过滤/图标依赖
     #[serde(default)]
     pub item_list: Vec<MarkerItemLinkVo>,
+    /// 关联（marker_linkage）ID，前端按 linkageId 关联展示；
+    /// 当前 marker 域接口未查询 marker_linkage，恒为 None
+    #[serde(default)]
+    pub linkage_id: Option<String>,
 }
 
 /// 空响应（会序列化为 {}）
@@ -70,6 +74,9 @@ pub struct MarkerIdListResponse {
 #[serde(rename_all = "camelCase")]
 pub struct MarkerListResponse {
     pub total: usize,
+    /// 分页大小（前端 PageListVoMarkerVo 的 size）
+    #[serde(default)]
+    pub size: Option<i64>,
     #[serde(rename = "record")]
     pub items: Vec<MarkerVO>,
 }

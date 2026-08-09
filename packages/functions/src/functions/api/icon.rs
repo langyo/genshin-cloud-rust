@@ -15,16 +15,13 @@ use _utils::{
     jwt::AuthInfo,
     models::{
         IconAddRequest, IconListRequest, IconUpdateRequest,
-        icon::{IconAddResponse, IconListResponse, IconSingleResponse, IconVO},
+        icon::{IconListResponse, IconSingleResponse, IconVO},
         wrapper::CommonResponse,
     },
 };
 
 // 新增图标
-pub async fn do_add(
-    auth: AuthInfo,
-    payload: IconAddRequest,
-) -> Result<CommonResponse<IconAddResponse>> {
+pub async fn do_add(auth: AuthInfo, payload: IconAddRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
 
@@ -44,7 +41,7 @@ pub async fn do_add(
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
-    Ok(CommonResponse::new(Ok(IconAddResponse { id: res.id })))
+    Ok(CommonResponse::new(Ok(res.id)))
 }
 
 // 列表查询（支持分页）

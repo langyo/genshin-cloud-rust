@@ -209,7 +209,7 @@ pub async fn do_join_type(
 pub async fn do_get_list_by_id(
     _auth: AuthInfo,
     payload: Vec<i64>,
-) -> Result<CommonResponse<ItemListResponse>> {
+) -> Result<CommonResponse<Vec<ItemVO>>> {
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
@@ -231,11 +231,7 @@ pub async fn do_get_list_by_id(
     for it in items {
         arr.push(item_to_vo(&it, &type_map, &icon_tag_map));
     }
-    let payload = ItemListResponse {
-        total: arr.len() as i64,
-        items: arr,
-    };
-    Ok(CommonResponse::new(Ok(payload)))
+    Ok(CommonResponse::new(Ok(arr)))
 }
 
 pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {

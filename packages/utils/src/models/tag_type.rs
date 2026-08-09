@@ -11,6 +11,7 @@ pub struct TagTypeBaseRequest {
     /// 父级分类 ID（-1 为根分类）
     pub parent_id: i64,
     /// 是否为末端类型
+    #[serde(default)]
     pub is_final: bool,
 }
 
@@ -60,6 +61,7 @@ pub struct TagTypeVO {
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeListResponse {
     pub total: i64,
+    #[serde(rename = "record")]
     pub list: Vec<TagTypeVO>,
 }
 

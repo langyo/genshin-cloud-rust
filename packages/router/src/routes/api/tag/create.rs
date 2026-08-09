@@ -1,17 +1,17 @@
 use anyhow::Result;
 
-use axum::{http::StatusCode, response::IntoResponse};
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
 
-/// 列出分类
-/// 列出图标的分类，typeId为-1的时候为列出所有的根分类
-/// POST /icon_type/get/list
+/// 新增标签（前端兼容路由，仅传标签名）
+/// PUT /tag/{tagName}
 #[tracing::instrument(skip(auth))]
-pub async fn list(
+pub async fn create(
     ExtractAuthInfo(auth): ExtractAuthInfo,
+    Path(tag_name): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::icon_type::do_list(auth).await {
+    match _functions::functions::api::tag::do_create_by_name(auth, tag_name).await {
         Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

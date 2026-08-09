@@ -19,10 +19,7 @@ use _utils::{
     models::{
         marker::MarkerFilterRequest,
         marker::{MarkerAddRequest, MarkerItemLinkVo, MarkerTweakRequest, MarkerUpdateData},
-        marker::{
-            MarkerAddResponse, MarkerEmptyResponse, MarkerIdListResponse, MarkerItemsResponse,
-            MarkerListResponse, MarkerVO,
-        },
+        marker::{MarkerEmptyResponse, MarkerListResponse, MarkerVO},
         wrapper::{CommonResponse, Pagination},
     },
 };
@@ -101,6 +98,8 @@ fn model_to_vo(
         hidden_flag: it.hidden_flag,
         extra: it.extra,
         item_list: item_map.get(&it.id).cloned().unwrap_or_default(),
+        // marker 域接口暂未查询 marker_linkage，恒为 None
+        linkage_id: None,
     }
 }
 
@@ -115,93 +114,112 @@ pub(crate) fn model_to_vo_doc(
 
 pub async fn do_tweak(
     auth: AuthInfo,
-    payload: MarkerTweakRequest,
-) -> Result<CommonResponse<MarkerEmptyResponse>> {
+    payloads: Vec<MarkerTweakRequest>,
+) -> Result<CommonResponse<Vec<MarkerVO>>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
-    for marker_id in payload.marker_ids.iter() {
-        let m = marker_model::Entity::find_safety_by_id(*marker_id)
-            .one(db)
-            .await?;
-        if m.is_none() {
-            // 跳过缺失的标记
-            continue;
-        }
-        let m = m.unwrap();
-        let mut am: marker_model::ActiveModel = m.into();
-
-        for tweak in payload.tweaks.iter() {
-            match tweak.prop {
-                _utils::models::marker::MarkerTweakConfigPropEnum::Content => {
-                    if let Some(v) = &tweak.meta.replace {
-                        am.content = Set(Some(v.clone()));
-                    } else if let Some(_utils::models::marker::TweakValue::String(s)) =
-                        &tweak.meta.value
-                    {
-                        // 简化处理：若值为 String -> 替换
-                        am.content = Set(Some(s.clone()));
-                    }
-                },
-                _utils::models::marker::MarkerTweakConfigPropEnum::Title => {
-                    if let Some(v) = &tweak.meta.replace {
-                        am.marker_title = Set(Some(v.clone()));
-                    }
-                },
-                _utils::models::marker::MarkerTweakConfigPropEnum::Position => {
-                    if let Some(v) = &tweak.meta.replace {
-                        am.position = Set(v.clone());
-                    }
-                },
-                _utils::models::marker::MarkerTweakConfigPropEnum::VideoPath => {
-                    if let Some(v) = &tweak.meta.replace {
-                        am.video_path = Set(Some(v.clone()));
-                    }
-                },
-                _utils::models::marker::MarkerTweakConfigPropEnum::RefreshTime => {
-                    if let Some(_v) = &tweak.meta.value
-                        && let _utils::models::marker::TweakValue::Integer(i) = _v
-                    {
-                        am.refresh_time = Set(*i);
-                    }
-                },
-                _utils::models::marker::MarkerTweakConfigPropEnum::Extra => {
-                    if let Some(map) = &tweak.meta.map {
-                        // 用序列化后的 map 完整替换 extra
-                        am.extra = Set(Some(serde_json::to_value(map)?));
-                    } else if let Some(_utils::models::marker::TweakValue::AnythingMap(m)) =
-                        &tweak.meta.value
-                    {
-                        // 尝试设置任意 JSON 值
-                        am.extra = Set(Some(serde_json::to_value(m)?));
-                    }
-                },
-                _utils::models::marker::MarkerTweakConfigPropEnum::HiddenFlag => {
-                    if let Some(_val) = &tweak.meta.value
-                        && let _utils::models::marker::TweakValue::Integer(i) = _val
-                    {
-                        // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
-                        let hf = match *i as i32 {
-                            0 => _utils::types::HiddenFlag::Visible,
-                            1 => _utils::types::HiddenFlag::Hidden,
-                            2 => _utils::types::HiddenFlag::Spy,
-                            3 => _utils::types::HiddenFlag::Suprise,
-                            _ => _utils::types::HiddenFlag::Visible,
-                        };
-                        am.hidden_flag = Set(hf);
-                    }
-                },
-                _utils::models::marker::MarkerTweakConfigPropEnum::ItemList => {
-                    tweak_item_list(db, *marker_id, tweak).await?;
-                },
+    let mut touched_ids: Vec<i64> = Vec::new();
+    for payload in payloads {
+        for marker_id in payload.marker_ids.iter() {
+            let m = marker_model::Entity::find_safety_by_id(*marker_id)
+                .one(db)
+                .await?;
+            if m.is_none() {
+                // 跳过缺失的标记
+                continue;
             }
-        }
+            let m = m.unwrap();
+            let mut am: marker_model::ActiveModel = m.into();
 
-        // 通过 ActiveModelBehavior 设置 updater 与 update_time；确保携带版本信息
-        marker_model::Entity::update_safety(am)?.exec(db).await?;
+            for tweak in payload.tweaks.iter() {
+                match tweak.prop {
+                    _utils::models::marker::MarkerTweakConfigPropEnum::Content => {
+                        if let Some(v) = &tweak.meta.replace {
+                            am.content = Set(Some(v.clone()));
+                        } else if let Some(_utils::models::marker::TweakValue::String(s)) =
+                            &tweak.meta.value
+                        {
+                            // 简化处理：若值为 String -> 替换
+                            am.content = Set(Some(s.clone()));
+                        }
+                    },
+                    _utils::models::marker::MarkerTweakConfigPropEnum::Title => {
+                        if let Some(v) = &tweak.meta.replace {
+                            am.marker_title = Set(Some(v.clone()));
+                        }
+                    },
+                    _utils::models::marker::MarkerTweakConfigPropEnum::Position => {
+                        if let Some(v) = &tweak.meta.replace {
+                            am.position = Set(v.clone());
+                        }
+                    },
+                    _utils::models::marker::MarkerTweakConfigPropEnum::VideoPath => {
+                        if let Some(v) = &tweak.meta.replace {
+                            am.video_path = Set(Some(v.clone()));
+                        }
+                    },
+                    _utils::models::marker::MarkerTweakConfigPropEnum::RefreshTime => {
+                        if let Some(_v) = &tweak.meta.value
+                            && let _utils::models::marker::TweakValue::Integer(i) = _v
+                        {
+                            am.refresh_time = Set(*i);
+                        }
+                    },
+                    _utils::models::marker::MarkerTweakConfigPropEnum::Extra => {
+                        if let Some(map) = &tweak.meta.map {
+                            // 用序列化后的 map 完整替换 extra
+                            am.extra = Set(Some(serde_json::to_value(map)?));
+                        } else if let Some(_utils::models::marker::TweakValue::AnythingMap(m)) =
+                            &tweak.meta.value
+                        {
+                            // 尝试设置任意 JSON 值
+                            am.extra = Set(Some(serde_json::to_value(m)?));
+                        }
+                    },
+                    _utils::models::marker::MarkerTweakConfigPropEnum::HiddenFlag => {
+                        if let Some(_val) = &tweak.meta.value
+                            && let _utils::models::marker::TweakValue::Integer(i) = _val
+                        {
+                            // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
+                            let hf = match *i as i32 {
+                                0 => _utils::types::HiddenFlag::Visible,
+                                1 => _utils::types::HiddenFlag::Hidden,
+                                2 => _utils::types::HiddenFlag::Spy,
+                                3 => _utils::types::HiddenFlag::Suprise,
+                                _ => _utils::types::HiddenFlag::Visible,
+                            };
+                            am.hidden_flag = Set(hf);
+                        }
+                    },
+                    _utils::models::marker::MarkerTweakConfigPropEnum::ItemList => {
+                        tweak_item_list(db, *marker_id, tweak).await?;
+                    },
+                }
+            }
+
+            // 通过 ActiveModelBehavior 设置 updater 与 update_time；确保携带版本信息
+            marker_model::Entity::update_safety(am)?.exec(db).await?;
+            touched_ids.push(*marker_id);
+        }
     }
 
-    Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
+    // 返回被修改 marker 的 VO 列表
+    if touched_ids.is_empty() {
+        return Ok(CommonResponse::new(Ok(vec![])));
+    }
+    let item_map = marker_item_map(db, &touched_ids).await?;
+    let mut arr = Vec::new();
+    for chunk in touched_ids.chunks(1000) {
+        let items = marker_model::Entity::find_safety()
+            .filter(marker_model::Column::Id.is_in(chunk))
+            .all(db)
+            .await?;
+        for it in items {
+            arr.push(model_to_vo(it, &item_map));
+        }
+    }
+    Ok(CommonResponse::new(Ok(arr)))
 }
 
 /// 解析 tweak 的 item_list 元数据为 (item_id, count) 列表。
@@ -336,7 +354,7 @@ async fn insert_item_link(
 pub async fn do_add_single(
     auth: AuthInfo,
     payload: MarkerAddRequest,
-) -> Result<CommonResponse<MarkerAddResponse>> {
+) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
 
@@ -365,7 +383,8 @@ pub async fn do_add_single(
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
-    Ok(CommonResponse::new(Ok(MarkerAddResponse { id: res.id })))
+    // 直接返回裸 id，前端期望 data 为 number
+    Ok(CommonResponse::new(Ok(res.id)))
 }
 
 pub async fn do_update_single(
@@ -406,7 +425,7 @@ pub async fn do_update_single(
 pub async fn do_get_id(
     _auth: AuthInfo,
     payload: MarkerFilterRequest,
-) -> Result<CommonResponse<MarkerIdListResponse>> {
+) -> Result<CommonResponse<Vec<i64>>> {
     let db = &DB_CONN.wait().pg_conn;
 
     // 如果提供了 item_id_list，则从 marker_item_link 收集 marker id
@@ -423,7 +442,7 @@ pub async fn do_get_id(
         let ids: HashSet<i64> = links.into_iter().map(|l| l.marker_id).collect();
         let mut v: Vec<i64> = ids.into_iter().collect();
         v.sort_unstable();
-        return Ok(CommonResponse::new(Ok(MarkerIdListResponse { ids: v })));
+        return Ok(CommonResponse::new(Ok(v)));
     }
 
     // 回退：返回所有 marker id
@@ -433,14 +452,13 @@ pub async fn do_get_id(
         .all(db)
         .await?;
     let ids: Vec<i64> = total_list.into_iter().map(|m| m.id).collect();
-    let payload = MarkerIdListResponse { ids };
-    Ok(CommonResponse::new(Ok(payload)))
+    Ok(CommonResponse::new(Ok(ids)))
 }
 
 pub async fn do_get_list_by_info(
     _auth: AuthInfo,
     payload: MarkerFilterRequest,
-) -> Result<CommonResponse<MarkerListResponse>> {
+) -> Result<CommonResponse<Vec<MarkerVO>>> {
     let db = &DB_CONN.wait().pg_conn;
 
     // 重用 do_get_id 的逻辑获取 id 列表，然后查询模型
@@ -468,10 +486,7 @@ pub async fn do_get_list_by_info(
     };
 
     if ids.is_empty() {
-        return Ok(CommonResponse::new(Ok(MarkerListResponse {
-            total: 0,
-            items: vec![],
-        })));
+        return Ok(CommonResponse::new(Ok(vec![])));
     }
 
     // Chunk the IDs to avoid exceeding sqlx's 65535 parameter limit
@@ -487,16 +502,13 @@ pub async fn do_get_list_by_info(
             arr.push(model_to_vo(it, &item_map));
         }
     }
-    Ok(CommonResponse::new(Ok(MarkerListResponse {
-        total: arr.len(),
-        items: arr,
-    })))
+    Ok(CommonResponse::new(Ok(arr)))
 }
 
 pub async fn do_get_list_by_id(
     _auth: AuthInfo,
     payload: Vec<i64>,
-) -> Result<CommonResponse<MarkerItemsResponse>> {
+) -> Result<CommonResponse<Vec<MarkerVO>>> {
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
@@ -510,9 +522,7 @@ pub async fn do_get_list_by_id(
 
     let db = &DB_CONN.wait().pg_conn;
     if payload.is_empty() {
-        return Ok(CommonResponse::new(Ok(MarkerItemsResponse {
-            items: vec![],
-        })));
+        return Ok(CommonResponse::new(Ok(vec![])));
     }
     let items = marker_model::Entity::find_safety()
         .filter(marker_model::Column::Id.is_in(payload))
@@ -524,7 +534,7 @@ pub async fn do_get_list_by_id(
     for it in items {
         arr.push(model_to_vo(it, &item_map));
     }
-    Ok(CommonResponse::new(Ok(MarkerItemsResponse { items: arr })))
+    Ok(CommonResponse::new(Ok(arr)))
 }
 
 pub async fn do_get_page(
@@ -549,6 +559,7 @@ pub async fn do_get_page(
     }
     Ok(CommonResponse::new(Ok(MarkerListResponse {
         total: total as usize,
+        size: Some(size as i64),
         items: arr,
     })))
 }

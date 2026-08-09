@@ -556,7 +556,7 @@ async fn area_and_item_doc_business_assertions() {
     // Append item 1001 + 1002
     marker_fns::do_tweak(
         auth.clone(),
-        MarkerTweakRequest {
+        vec![MarkerTweakRequest {
             marker_ids: vec![marker_id],
             tweaks: vec![MarkerTweakConfig {
                 meta: TweakMeta {
@@ -572,7 +572,7 @@ async fn area_and_item_doc_business_assertions() {
                 prop: MarkerTweakConfigPropEnum::ItemList,
                 marker_tweak_config_type: MarkerTweakConfigTypeEnum::Append,
             }],
-        },
+        }],
     )
     .await
     .expect("append item links")
@@ -587,7 +587,7 @@ async fn area_and_item_doc_business_assertions() {
     // InsertIfAbsent with an existing id must not duplicate
     marker_fns::do_tweak(
         auth.clone(),
-        MarkerTweakRequest {
+        vec![MarkerTweakRequest {
             marker_ids: vec![marker_id],
             tweaks: vec![MarkerTweakConfig {
                 meta: TweakMeta {
@@ -600,7 +600,7 @@ async fn area_and_item_doc_business_assertions() {
                 prop: MarkerTweakConfigPropEnum::ItemList,
                 marker_tweak_config_type: MarkerTweakConfigTypeEnum::InsertIfAbsent,
             }],
-        },
+        }],
     )
     .await
     .expect("insert-if-absent tweak")
@@ -615,7 +615,7 @@ async fn area_and_item_doc_business_assertions() {
     // Replace with a single item 1003
     marker_fns::do_tweak(
         auth.clone(),
-        MarkerTweakRequest {
+        vec![MarkerTweakRequest {
             marker_ids: vec![marker_id],
             tweaks: vec![MarkerTweakConfig {
                 meta: TweakMeta {
@@ -628,7 +628,7 @@ async fn area_and_item_doc_business_assertions() {
                 prop: MarkerTweakConfigPropEnum::ItemList,
                 marker_tweak_config_type: MarkerTweakConfigTypeEnum::Replace,
             }],
-        },
+        }],
     )
     .await
     .expect("replace tweak")
@@ -643,7 +643,7 @@ async fn area_and_item_doc_business_assertions() {
     // RemoveLeft removes 1003
     marker_fns::do_tweak(
         auth.clone(),
-        MarkerTweakRequest {
+        vec![MarkerTweakRequest {
             marker_ids: vec![marker_id],
             tweaks: vec![MarkerTweakConfig {
                 meta: TweakMeta {
@@ -656,7 +656,7 @@ async fn area_and_item_doc_business_assertions() {
                 prop: MarkerTweakConfigPropEnum::ItemList,
                 marker_tweak_config_type: MarkerTweakConfigTypeEnum::RemoveLeft,
             }],
-        },
+        }],
     )
     .await
     .expect("remove tweak")
@@ -858,6 +858,7 @@ async fn area_and_item_doc_business_assertions() {
     score_fns::do_generate_score(
         auth.clone(),
         ScoreGenerateRequest {
+            generator_id: None,
             end_time: end_ms,
             scope: "map".into(),
             span: "DAY".into(),
@@ -898,8 +899,13 @@ async fn area_and_item_doc_business_assertions() {
     .expect("get score data")
     .data
     .expect("get score data ok");
-    assert_eq!(data.samples.len(), 1, "one sample returned");
-    assert_eq!(data.samples[0].score, 4.0, "score read back from content");
+    let samples = data.as_array().expect("samples array");
+    assert_eq!(samples.len(), 1, "one sample returned");
+    assert_eq!(
+        samples[0]["score"].as_f64().unwrap(),
+        4.0,
+        "score read back from content"
+    );
 
     // ── item_common: the add/delete/list pipeline operates on the
     //    item_area_public link table (Java parity), NOT on the item table ──
@@ -927,7 +933,7 @@ async fn area_and_item_doc_business_assertions() {
     .data
     .expect("list ok");
     assert_eq!(list.total, 2, "two common items linked");
-    let names: Vec<&str> = list.items.iter().map(|i| i.name.as_str()).collect();
+    let names: Vec<&str> = list.items.iter().map(|i| i.item.name.as_str()).collect();
     assert!(names.contains(&"紫晶矿") && names.contains(&"日落果"));
     // The item table itself must be untouched by the add (no new rows created).
     let item_rows = item_model::Entity::find_safety()
@@ -973,7 +979,7 @@ async fn area_and_item_doc_business_assertions() {
     .data
     .expect("list ok");
     assert_eq!(list.total, 1, "delete must drop the link");
-    assert_eq!(list.items[0].id, item_c, "the surviving item is c");
+    assert_eq!(list.items[0].item.id, item_c, "the surviving item is c");
     assert_eq!(
         item_model::Entity::find_safety_by_id(item_a)
             .one(db)

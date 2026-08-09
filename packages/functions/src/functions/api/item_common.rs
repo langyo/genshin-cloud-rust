@@ -11,7 +11,10 @@ use sea_orm::{ActiveValue::Set, ColumnTrait, QueryFilter, QueryOrder, QuerySelec
 use _utils::{
     jwt::AuthInfo,
     models::{
-        common::EmptyResponse, item::ItemListResponse, wrapper::CommonResponse, wrapper::Pagination,
+        common::EmptyResponse,
+        item::{ItemAreaPublicListResponse, ItemAreaPublicVo},
+        wrapper::CommonResponse,
+        wrapper::Pagination,
     },
 };
 
@@ -30,11 +33,11 @@ const MAX_BATCH: usize = 1000;
 /// `POST /item_common/get/list`
 ///
 /// 列出公用物品：分页查询 `item_area_public` 关联表，组合 item 信息。
-/// 响应形状与原来一致（`ItemListResponse`，纯 item 视图）。
+/// 响应为 `ItemAreaPublicVo`（ItemVO + itemId），与前端 ItemAreaPublicVo 契约一致。
 pub async fn do_get_list(
     _auth: AuthInfo,
     payload: Pagination,
-) -> Result<CommonResponse<ItemListResponse>> {
+) -> Result<CommonResponse<ItemAreaPublicListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let size = payload.size.unwrap_or(10) as u64;
@@ -66,11 +69,14 @@ pub async fn do_get_list(
     let icon_tag_map = super::icon::icon_tag_map(db).await?;
     for link in links {
         if let Some(it) = by_id.get(&link.item_id) {
-            arr.push(item_to_vo(it, &type_map, &icon_tag_map));
+            arr.push(ItemAreaPublicVo {
+                item_id: it.id,
+                item: item_to_vo(it, &type_map, &icon_tag_map),
+            });
         }
     }
 
-    let payload = ItemListResponse {
+    let payload = ItemAreaPublicListResponse {
         total: total as i64,
         items: arr,
     };

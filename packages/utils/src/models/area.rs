@@ -63,7 +63,12 @@ pub struct AreaListRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AreaVO {
+    pub version: i64,
     pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
     pub name: String,
     pub code: Option<String>,
     pub content: Option<String>,

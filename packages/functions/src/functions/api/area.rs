@@ -98,7 +98,14 @@ pub async fn do_list(
     let mut ret = Vec::with_capacity(items.len());
     for it in items {
         ret.push(AreaVO {
+            version: it.version,
             id: it.id,
+            create_time: it.create_time.and_utc().timestamp_millis() as f64,
+            update_time: it
+                .update_time
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
+            creator_id: it.creator_id,
+            updater_id: it.updater_id,
             name: it.name,
             code: it.code,
             content: it.content,
@@ -123,7 +130,14 @@ pub async fn do_get(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<Area
     let item = item.ok_or(anyhow!("Area not found"))?;
     Ok(CommonResponse::new(Ok(AreaSingleResponse {
         item: AreaVO {
+            version: item.version,
             id: item.id,
+            create_time: item.create_time.and_utc().timestamp_millis() as f64,
+            update_time: item
+                .update_time
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
+            creator_id: item.creator_id,
+            updater_id: item.updater_id,
             name: item.name,
             code: item.code,
             content: item.content,

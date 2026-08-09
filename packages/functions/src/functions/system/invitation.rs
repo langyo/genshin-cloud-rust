@@ -4,7 +4,11 @@ use anyhow::{Result, anyhow};
 use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
 use _database::{DB_CONN, models::system::sys_user_invitation as inv_model};
-use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{
+    db_operations::SafeEntityTrait,
+    jwt::AuthInfo,
+    models::{SysUserInvitationVo, wrapper::CommonResponse},
+};
 
 /// List invitations with optional filtering by code / username.
 pub async fn do_list(
@@ -27,10 +31,25 @@ pub async fn do_list(
     let total = query.clone().count(db).await?;
     let offset = current.saturating_sub(1).saturating_mul(size);
     let items = query.limit(size).offset(offset).all(db).await?;
+    let record: Vec<SysUserInvitationVo> = items
+        .into_iter()
+        .map(|inv| SysUserInvitationVo {
+            id: inv.id,
+            create_time: inv.create_time.and_utc().timestamp_millis() as f64,
+            update_time: inv
+                .update_time
+                .map(|t| t.and_utc().timestamp_millis() as f64),
+            code: inv.code,
+            username: inv.username,
+            role_id: inv.role_id.map(|r| r as i64),
+            remark: inv.remark,
+            access_policy: inv.access_policy,
+        })
+        .collect();
 
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "total": total,
-        "list": items,
+        "record": record,
     }))))
 }
 
@@ -81,7 +100,8 @@ pub async fn do_info(auth: AuthInfo, code: String) -> Result<CommonResponse<serd
 }
 
 /// Consume (use) an invitation code — marks it as used by deleting it.
-pub async fn do_consume(auth: AuthInfo, code: String) -> Result<CommonResponse<()>> {
+/// 返回 `{userId, result}`，对齐前端 `SysUserInvitationConsumeResultVo`。
+pub async fn do_consume(auth: AuthInfo, code: String) -> Result<CommonResponse<serde_json::Value>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let inv = inv_model::Entity::find_safety()
@@ -92,7 +112,10 @@ pub async fn do_consume(auth: AuthInfo, code: String) -> Result<CommonResponse<(
     inv_model::Entity::delete_safety(inv.into())?
         .exec(db)
         .await?;
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(serde_json::json!({
+        "userId": auth.info.id,
+        "result": "SUCCESS",
+    }))))
 }
 
 /// Delete an invitation by id (soft delete).

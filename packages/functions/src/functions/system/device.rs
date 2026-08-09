@@ -4,7 +4,11 @@ use anyhow::{Result, anyhow};
 use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
 use _database::{DB_CONN, models::system::sys_user_device as device_model};
-use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{
+    db_operations::SafeEntityTrait,
+    jwt::AuthInfo,
+    models::{SysUserDeviceVo, wrapper::CommonResponse},
+};
 
 /// List user devices with optional filtering.
 pub async fn do_list(
@@ -31,10 +35,25 @@ pub async fn do_list(
     let total = query.clone().count(db).await?;
     let offset = current.saturating_sub(1).saturating_mul(size);
     let items = query.limit(size).offset(offset).all(db).await?;
+    let record: Vec<SysUserDeviceVo> = items
+        .into_iter()
+        .map(|d| SysUserDeviceVo {
+            id: d.id,
+            create_time: d.create_time.and_utc().timestamp_millis() as f64,
+            update_time: d.update_time.map(|t| t.and_utc().timestamp_millis() as f64),
+            user_id: d.user_id,
+            device_id: d.device_id,
+            ipv4: d.ipv4,
+            status: d.status,
+            last_login_time: d
+                .last_login_time
+                .map(|t| t.and_utc().timestamp_millis() as f64),
+        })
+        .collect();
 
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "total": total,
-        "list": items,
+        "record": record,
     }))))
 }
 

@@ -98,9 +98,15 @@ pub struct NoticeUpdateRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NoticeVO {
+    pub version: i64,
     pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
     pub title: String,
     pub content: Option<String>,
+    #[serde(rename = "channel")]
     pub channels: Vec<NoticeChannel>,
     pub sort_index: i64,
     pub valid_time_start: Option<f64>,
@@ -113,6 +119,8 @@ pub struct NoticeListResponse {
     pub total: i64,
     #[serde(rename = "record")]
     pub items: Vec<NoticeVO>,
+    #[serde(default)]
+    pub size: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

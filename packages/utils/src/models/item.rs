@@ -184,6 +184,26 @@ pub struct ItemListResponse {
     pub items: Vec<ItemVO>,
 }
 
+/// 公用物品 VO（`item_common` 列表）：ItemVO + itemId。
+/// 前端按 `itemId` 关联/操作公用物品，而 ItemVO 主键是 `id`。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemAreaPublicVo {
+    /// 物品 ID（与 ItemVO.id 一致）
+    pub item_id: i64,
+    #[serde(flatten)]
+    pub item: ItemVO,
+}
+
+/// 公用物品列表响应
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemAreaPublicListResponse {
+    pub total: i64,
+    #[serde(rename = "record")]
+    pub items: Vec<ItemAreaPublicVo>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemSingleResponse {

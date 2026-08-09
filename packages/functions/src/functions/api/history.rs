@@ -39,19 +39,8 @@ pub async fn do_get_list(
         query = query.filter(history_model::Column::CreateTime.lte(ndt));
     }
 
-    if let Some(creator_s) = payload.creator_id {
-        // 支持逗号分隔的多 id 或单个 id 字符串
-        let ids: Vec<i64> = creator_s
-            .split(',')
-            .filter_map(|s| s.trim().parse::<i64>().ok())
-            .collect();
-        if !ids.is_empty() {
-            if ids.len() == 1 {
-                query = query.filter(history_model::Column::CreatorId.eq(ids[0]));
-            } else {
-                query = query.filter(history_model::Column::CreatorId.is_in(ids));
-            }
-        }
+    if let Some(creator_id) = payload.creator_id {
+        query = query.filter(history_model::Column::CreatorId.eq(creator_id));
     }
 
     if let Some(edit_type) = payload.edit_type {
@@ -104,6 +93,8 @@ pub async fn do_get_list(
             creator_id: it.creator_id,
             updater_id: it.updater_id,
             del_flag: it.del_flag,
+            md5: it.md5,
+            ipv4: it.ipv4,
             t_id: it.t_id,
             history_type: it.history_type,
             edit_type: it.edit_type,

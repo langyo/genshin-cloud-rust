@@ -7,7 +7,10 @@ use sea_orm::{
     prelude::*,
 };
 
-use _database::{DB_CONN, models::common::notice as notice_model};
+use _database::{
+    DB_CONN,
+    models::common::notice::{self as notice_model, ChannelWrapper},
+};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
@@ -111,7 +114,14 @@ pub async fn do_get_notice_list(
         }
 
         arr.push(NoticeVO {
+            version: it.version,
             id: it.id,
+            create_time: it.create_time.and_utc().timestamp_millis() as f64,
+            update_time: it
+                .update_time
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
+            creator_id: it.creator_id,
+            updater_id: it.updater_id,
             title: it.title,
             content: it.content,
             channels,
@@ -127,6 +137,7 @@ pub async fn do_get_notice_list(
     let payload = NoticeListResponse {
         total: total as i64,
         items: arr,
+        size: Some(size as i64),
     };
     Ok(CommonResponse::new(Ok(payload)))
 }
@@ -159,7 +170,29 @@ pub async fn do_add_notice(
 
         title: Set(payload.title),
         content: Set(Some(payload.content)),
-        ..Default::default()
+        channel: Set(ChannelWrapper(
+            payload
+                .channel
+                .iter()
+                .map(|c| {
+                    serde_json::to_string(c)
+                        .unwrap_or_default()
+                        .trim_matches('"')
+                        .to_string()
+                })
+                .collect(),
+        )),
+        sort_index: Set(payload.sort_index as i32),
+        valid_time_start: Set(payload.valid_time_start.map(|ts| {
+            chrono::DateTime::from_timestamp_millis(ts as i64)
+                .map(|dt| dt.naive_utc())
+                .unwrap_or(now)
+        })),
+        valid_time_end: Set(payload.valid_time_end.map(|ts| {
+            chrono::DateTime::from_timestamp_millis(ts as i64)
+                .map(|dt| dt.naive_utc())
+                .unwrap_or(now)
+        })),
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;

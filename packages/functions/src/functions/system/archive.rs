@@ -9,14 +9,52 @@ use sea_orm::{
 };
 
 use _database::{DB_CONN, models::system::sys_user_archive as archive_model};
-use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{
+    db_operations::SafeEntityTrait,
+    jwt::AuthInfo,
+    models::{ArchiveSlotVo, wrapper::CommonResponse},
+};
+
+/// 把实体行转换成槽位 VO：`data` 列存的是存档 JSON 文本，直接作为 `archive` 字段；
+/// 兼容历史数据（data 为非字符串 JSON 值）时退化为重新序列化。
+fn entity_to_slot_vo(a: archive_model::Model) -> ArchiveSlotVo {
+    ArchiveSlotVo {
+        slot_index: a.slot_index,
+        time: a.create_time.and_utc().timestamp_millis() as f64,
+        archive: a
+            .data
+            .as_str()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| serde_json::to_string(&a.data).unwrap_or_default()),
+    }
+}
+
+/// 从任意 JSON body 中提取存档文本：
+/// 前端直接上传 `JSON.stringify({Data_KYJG, Time_KYJG, Preference})` 的存档体，
+/// 若带有 `archive` 字段（`{time, archive, historyIndex}` 包装体）则取该字段，
+/// 否则把整个请求体序列化作为存档文本。
+fn extract_archive(body: &serde_json::Value) -> String {
+    body.get("archive")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| serde_json::to_string(body).unwrap_or_default())
+}
+
+/// 从任意 JSON body 中提取保存时间（毫秒时间戳），取不到默认当前时间。
+fn extract_time(body: &serde_json::Value) -> chrono::NaiveDateTime {
+    body.get("time")
+        .and_then(|v| v.as_f64())
+        .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms as i64))
+        .map(|dt| dt.naive_utc())
+        .unwrap_or_else(|| Utc::now().naive_utc())
+}
 
 /// Get the latest archive for a given slot index.
 pub async fn do_get_last(
     _auth: AuthInfo,
     user_id: i64,
     slot_index: i32,
-) -> Result<CommonResponse<serde_json::Value>> {
+) -> Result<CommonResponse<Option<ArchiveSlotVo>>> {
     let db = &DB_CONN.wait().pg_conn;
     let archive = archive_model::Entity::find_safety()
         .filter(archive_model::Column::UserId.eq(user_id))
@@ -24,7 +62,7 @@ pub async fn do_get_last(
         .order_by_desc(archive_model::Column::CreateTime)
         .one(db)
         .await?;
-    Ok(CommonResponse::new(Ok(serde_json::to_value(archive)?)))
+    Ok(CommonResponse::new(Ok(archive.map(entity_to_slot_vo))))
 }
 
 /// Get all history archives for a given slot index.
@@ -32,7 +70,7 @@ pub async fn do_get_history(
     _auth: AuthInfo,
     user_id: i64,
     slot_index: i32,
-) -> Result<CommonResponse<serde_json::Value>> {
+) -> Result<CommonResponse<Vec<serde_json::Value>>> {
     let db = &DB_CONN.wait().pg_conn;
     let items = archive_model::Entity::find_safety()
         .filter(archive_model::Column::UserId.eq(user_id))
@@ -40,39 +78,43 @@ pub async fn do_get_history(
         .order_by_desc(archive_model::Column::CreateTime)
         .all(db)
         .await?;
-    Ok(CommonResponse::new(Ok(serde_json::json!({
-        "total": items.len(),
-        "list": items,
-    }))))
+    let record: Vec<serde_json::Value> = items
+        .into_iter()
+        .map(|a| serde_json::to_value(entity_to_slot_vo(a)).unwrap_or_default())
+        .collect();
+    Ok(CommonResponse::new(Ok(record)))
 }
 
 /// Get all history archives across all slots for the user.
 pub async fn do_get_all_history(
     _auth: AuthInfo,
     user_id: i64,
-) -> Result<CommonResponse<serde_json::Value>> {
+) -> Result<CommonResponse<Vec<serde_json::Value>>> {
     let db = &DB_CONN.wait().pg_conn;
     let items = archive_model::Entity::find_safety()
         .filter(archive_model::Column::UserId.eq(user_id))
         .order_by_desc(archive_model::Column::CreateTime)
         .all(db)
         .await?;
-    Ok(CommonResponse::new(Ok(serde_json::json!({
-        "total": items.len(),
-        "list": items,
-    }))))
+    let record: Vec<serde_json::Value> = items
+        .into_iter()
+        .map(|a| serde_json::to_value(entity_to_slot_vo(a)).unwrap_or_default())
+        .collect();
+    Ok(CommonResponse::new(Ok(record)))
 }
 
 /// Save (put) an archive to a slot.
+/// 请求体为任意 JSON：前端直接上传存档 JSON 字符串；兼容 `{time, archive, historyIndex}` 包装体。
 pub async fn do_save(
     _auth: AuthInfo,
     user_id: i64,
     slot_index: i32,
     name: Option<String>,
-    data: serde_json::Value,
+    body: serde_json::Value,
 ) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
-    let now = Utc::now().naive_utc();
+    let archive = extract_archive(&body);
+    let now = extract_time(&body);
 
     let am = archive_model::ActiveModel {
         version: Set(0),
@@ -85,7 +127,7 @@ pub async fn do_save(
         name: Set(name),
         slot_index: Set(slot_index),
         user_id: Set(user_id),
-        data: Set(data),
+        data: Set(serde_json::Value::String(archive)),
     };
     let res = archive_model::Entity::insert(am).exec(db).await?;
     Ok(CommonResponse::new(Ok(serde_json::json!({

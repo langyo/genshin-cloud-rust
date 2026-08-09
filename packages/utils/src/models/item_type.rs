@@ -63,6 +63,7 @@ pub struct ItemTypeAddRequest {
     #[serde(default)]
     pub icon_id: i64,
     /// 是否为末端地区
+    #[serde(default)]
     pub is_final: bool,
     /// 类型名
     pub name: Option<String>,

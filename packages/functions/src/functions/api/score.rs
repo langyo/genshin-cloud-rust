@@ -9,7 +9,7 @@ use _database::{
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
-    models::score::{ScoreDataRequest, ScoreGenerateRequest, ScoreResponse, ScoreSample},
+    models::score::{ScoreDataRequest, ScoreGenerateRequest, ScoreSample},
     models::wrapper::CommonResponse,
     types::{HistoryEditType, HistoryOperationType},
 };
@@ -29,7 +29,7 @@ use _utils::{
 pub async fn do_generate_score(
     _auth: AuthInfo,
     payload: ScoreGenerateRequest,
-) -> Result<CommonResponse<ScoreResponse>> {
+) -> Result<CommonResponse<String>> {
     let db = &DB_CONN.wait().pg_conn;
 
     // 解析时间范围
@@ -84,9 +84,6 @@ pub async fn do_generate_score(
     }
 
     // 4. 写入 score_stat 表（每个贡献者一行）
-    let mut samples = Vec::new();
-    let mut total_score = 0.0f64;
-
     for (&user_id, &(count, field_weight)) in &contributions {
         let score = field_weight;
 
@@ -110,21 +107,9 @@ pub async fn do_generate_score(
             }))),
         };
         score_stat_model::Entity::insert(am).exec(db).await?;
-
-        samples.push(ScoreSample {
-            time: span_end.and_utc().timestamp_millis() as f64,
-            score,
-        });
-        total_score += score;
     }
 
-    let average = if samples.is_empty() {
-        0.0
-    } else {
-        total_score / samples.len() as f64
-    };
-
-    Ok(CommonResponse::new(Ok(ScoreResponse { samples, average })))
+    Ok(CommonResponse::new(Ok("ok".to_string())))
 }
 
 /// 单条打点记录的字段级权重（Java `ScoreDataPunctuateVo` 语义的近似）。
@@ -151,7 +136,7 @@ fn entry_weight(h: &history_model::Model) -> f64 {
 pub async fn do_get_score_data(
     _auth: AuthInfo,
     payload: ScoreDataRequest,
-) -> Result<CommonResponse<ScoreResponse>> {
+) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let start = timestamp_to_naive(payload.start_time);
@@ -177,13 +162,7 @@ pub async fn do_get_score_data(
         })
         .collect();
 
-    let average = if samples.is_empty() {
-        0.0
-    } else {
-        samples.iter().map(|s| s.score).sum::<f64>() / samples.len() as f64
-    };
-
-    Ok(CommonResponse::new(Ok(ScoreResponse { samples, average })))
+    Ok(CommonResponse::new(Ok(serde_json::json!(samples))))
 }
 
 /// 从 score_stat.content JSON 提取分数：优先 `fieldWeight`（字段级加权），

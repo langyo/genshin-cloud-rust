@@ -7,12 +7,12 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 删除标签缓存
 /// DELETE /cache/icon_tag
-#[tracing::instrument(skip(_auth))]
+#[tracing::instrument(skip(auth))]
 pub async fn delete_icon_tag_cache(
-    ExtractAuthInfo(_auth): ExtractAuthInfo,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::cache::do_delete_icon_tag_cache(_auth).await {
-        Ok(_) => Ok((StatusCode::OK, axum::Json(serde_json::json!({})))),
+    match _functions::functions::api::cache::do_delete_icon_tag_cache(auth).await {
+        Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
     }
 }

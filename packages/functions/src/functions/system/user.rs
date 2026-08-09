@@ -12,21 +12,20 @@ use _database::models::system::sys_user as sys_user_model;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
-    models::{Pagination, SysUserVO},
+    models::{CommonResponse, Pagination, SysUserVO},
     types::{AccessPolicyItemEnum, SystemUserRole, UserSort},
 };
 
 // 业务处理函数
 pub async fn do_register(
     _auth: AuthInfo,
-    access_policy: Vec<AccessPolicyItemEnum>,
-    logo: String,
-    remark: String,
-    role_id: SystemUserRole,
+    access_policy: Option<Vec<AccessPolicyItemEnum>>,
+    logo: Option<String>,
+    remark: Option<String>,
+    role_id: Option<SystemUserRole>,
     username: String,
     password: String,
-) -> Result<()> {
-    let _ = (&access_policy, &logo, &remark, &role_id, &username);
+) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let now = Utc::now().naive_utc();
@@ -44,28 +43,29 @@ pub async fn do_register(
         nickname: Set(None),
         qq: Set(None),
         phone: Set(None),
-        logo: Set(Some(logo)),
-        role_id: Set(role_id),
-        access_policy: Set(Some(_utils::types::AccessPolicyList(access_policy))),
-        remark: Set(Some(remark)),
+        logo: Set(logo),
+        role_id: Set(role_id.unwrap_or(SystemUserRole::MapUser)),
+        access_policy: Set(access_policy.map(_utils::types::AccessPolicyList)),
+        remark: Set(remark),
     };
 
-    sys_user_model::Entity::insert(am).exec(db).await?;
-    Ok(())
+    let res = sys_user_model::Entity::insert(am).exec(db).await?;
+    Ok(CommonResponse::new(Ok(
+        serde_json::json!({"id": res.last_insert_id}),
+    )))
 }
 
 #[allow(clippy::too_many_arguments)]
 pub async fn do_register_qq(
     _auth: AuthInfo,
-    access_policy: Vec<AccessPolicyItemEnum>,
-    logo: String,
-    remark: String,
-    role_id: SystemUserRole,
+    access_policy: Option<Vec<AccessPolicyItemEnum>>,
+    logo: Option<String>,
+    remark: Option<String>,
+    role_id: Option<SystemUserRole>,
     username: String,
     password: String,
     qq: String,
-) -> Result<()> {
-    let _ = (&access_policy, &logo, &remark, &role_id, &username);
+) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let now = Utc::now().naive_utc();
@@ -83,14 +83,16 @@ pub async fn do_register_qq(
         nickname: Set(None),
         qq: Set(Some(qq)),
         phone: Set(None),
-        logo: Set(Some(logo)),
-        role_id: Set(role_id),
-        access_policy: Set(Some(_utils::types::AccessPolicyList(access_policy))),
-        remark: Set(Some(remark)),
+        logo: Set(logo),
+        role_id: Set(role_id.unwrap_or(SystemUserRole::MapUser)),
+        access_policy: Set(access_policy.map(_utils::types::AccessPolicyList)),
+        remark: Set(remark),
     };
 
-    sys_user_model::Entity::insert(am).exec(db).await?;
-    Ok(())
+    let res = sys_user_model::Entity::insert(am).exec(db).await?;
+    Ok(CommonResponse::new(Ok(
+        serde_json::json!({"id": res.last_insert_id}),
+    )))
 }
 
 pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
@@ -112,17 +114,8 @@ pub async fn do_update(
     phone: Option<String>,
     qq: Option<String>,
     remark: Option<String>,
-    role_id: SystemUserRole,
-) -> Result<()> {
-    let _ = (
-        &access_policy,
-        &logo,
-        &nickname,
-        &phone,
-        &qq,
-        &remark,
-        &role_id,
-    );
+    role_id: Option<SystemUserRole>,
+) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(id)
         .one(db)
@@ -148,25 +141,22 @@ pub async fn do_update(
     if let Some(r) = remark {
         am.remark = Set(Some(r));
     }
-    am.role_id = Set(role_id);
+    if let Some(rid) = role_id {
+        am.role_id = Set(rid);
+    }
 
     sys_user_model::Entity::update_safety(am)?.exec(db).await?;
-    Ok(())
+    Ok(CommonResponse::new(Ok(())))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn do_update_password(
     _auth: AuthInfo,
-    _access_policy: Vec<AccessPolicyItemEnum>,
-    id: i64,
-    _logo: String,
+    user_id: i64,
     old_password: String,
-    _remark: String,
-    _role_id: SystemUserRole,
     new_password: String,
-) -> Result<()> {
+) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
-    let m = sys_user_model::Entity::find_safety_by_id(id)
+    let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await?;
     let m = m.ok_or(anyhow!("User not found"))?;
@@ -179,7 +169,7 @@ pub async fn do_update_password(
     let mut am: sys_user_model::ActiveModel = m.into();
     am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)?);
     sys_user_model::Entity::update_safety(am)?.exec(db).await?;
-    Ok(())
+    Ok(CommonResponse::new(Ok(())))
 }
 
 pub async fn do_update_password_by_admin(
@@ -209,18 +199,22 @@ pub async fn do_delete(_auth: AuthInfo, work_id: i64) -> Result<()> {
 pub async fn do_list(
     _auth: AuthInfo,
     pagination: Pagination,
-    nickname: String,
+    nickname: Option<String>,
     role_ids: Option<Vec<SystemUserRole>>,
     sort: Option<Vec<UserSort>>,
-    username: String,
-) -> Result<serde_json::Value> {
+    username: Option<String>,
+) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let mut query = sys_user_model::Entity::find_safety();
-    if !nickname.is_empty() {
+    if let Some(nickname) = nickname
+        && !nickname.is_empty()
+    {
         query = query.filter(sys_user_model::Column::Nickname.like(nickname));
     }
-    if !username.is_empty() {
+    if let Some(username) = username
+        && !username.is_empty()
+    {
         query = query.filter(sys_user_model::Column::Username.eq(username));
     }
     if let Some(rids) = role_ids {
@@ -256,7 +250,9 @@ pub async fn do_list(
     let items = query.limit(size).offset(offset).all(db).await?;
 
     let vos: Vec<SysUserVO> = items.into_iter().map(Into::into).collect();
-    Ok(serde_json::json!({"total": total, "items": vos}))
+    Ok(CommonResponse::new(Ok(
+        serde_json::json!({"total": total, "record": vos}),
+    )))
 }
 
 pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
