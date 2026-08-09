@@ -184,6 +184,7 @@ pub async fn do_update(
         .await
         .map_err(|e| (500, e.to_string()))?;
     let m = m.ok_or_else(|| (500, "User not found".to_string()))?;
+    let old_role = m.role_id;
     let mut am: sys_user_model::ActiveModel = m.into();
 
     if let Some(ap) = access_policy {
@@ -231,6 +232,15 @@ pub async fn do_update(
         .exec(db)
         .await
         .map_err(|e| (500, e.to_string()))?;
+    // 角色变更（仅 Admin 操作生效）后吊销该用户全部会话：被降权/换角的
+    // 用户不得继续持有旧角色权限（Redis VO 快照最长 15 天）。Redis 不可用
+    // 时忽略错误（降级）。
+    if is_admin
+        && let Some(rid) = role_id
+        && old_role != rid
+    {
+        let _ = revoke_user_sessions(id).await;
+    }
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -270,6 +280,9 @@ pub async fn do_update_password(
         .exec(db)
         .await
         .map_err(|e| (500, e.to_string()))?;
+    // 改密成功后吊销该用户全部会话（含其他设备）：已签发 token 一律失效。
+    // Redis 不可用时忽略错误（降级）。
+    let _ = revoke_user_sessions(user_id).await;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -286,6 +299,9 @@ pub async fn do_update_password_by_admin(
     let mut am: sys_user_model::ActiveModel = m.into();
     am.password = Set(_utils::bcrypt::generate_storage_password(password)?);
     sys_user_model::Entity::update_safety(am)?.exec(db).await?;
+    // 管理员重置密码后吊销该用户全部会话，旧 token 一律失效（无旧密码
+    // 校验的管理员通道同样生效）。Redis 不可用时忽略错误（降级）。
+    let _ = revoke_user_sessions(user_id).await;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -294,6 +310,9 @@ pub async fn do_delete(_auth: AuthInfo, work_id: i64) -> Result<()> {
     sys_user_model::Entity::delete_safety_by_id(work_id)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
+    // 删除后吊销该用户全部 Redis 会话：软删用户的 token 靠缓存 VO 仍能
+    // 最长有效 15 天，必须立即失效。Redis 不可用时忽略错误（降级）。
+    let _ = revoke_user_sessions(work_id).await;
     Ok(())
 }
 
@@ -356,13 +375,14 @@ pub async fn do_list(
     )))
 }
 
-pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
-    // 踢出用户：删除该用户在 Redis 中的全部会话令牌。
-    // JWT 本身无状态，登出/踢出依赖 Redis 会话（jwt:access:{uid}:{jti}）。
-    let user_id = work_id
-        .parse::<i64>()
-        .map_err(|_| anyhow!("Invalid user id"))?;
-
+/// 吊销指定用户的全部 Redis 会话（jwt:access:{uid}:* / jwt:refresh:{uid}:*）。
+///
+/// 供 do_kick_out / 删号 / 降权 / 改密共用：这些操作之后旧会话必须立即失效，
+/// 否则 Redis 中缓存的用户 VO 快照最长还能续命 15 天（被删/降权用户继续持有
+/// 旧权限、改密后旧设备仍可访问）。用 SCAN + pipeline 而非 KEYS：KEYS 会阻塞
+/// Redis 主线程（大 key 空间下长时间阻塞），SCAN 按游标分批遍历，收集后一次
+/// pipeline 删除。Redis 不可用时退化为无操作（与 oauth 的降级策略一致）。
+pub(crate) async fn revoke_user_sessions(user_id: i64) -> Result<()> {
     let Some(redis_client) = &DB_CONN.wait().redis_conn else {
         // Redis 不可用时退化为无操作（与 oauth 的降级策略一致）
         return Ok(());
@@ -374,8 +394,6 @@ pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
 
     let access_prefix = format!("jwt:access:{user_id}:*");
     let refresh_prefix = format!("jwt:refresh:{user_id}:*");
-    // 用 SCAN + pipeline 而非 KEYS：KEYS 会阻塞 Redis 主线程（大 key 空间下
-    // 长时间阻塞），SCAN 按游标分批遍历；收集后一次 pipeline 删除。
     for prefix in [access_prefix, refresh_prefix] {
         let keys = scan_keys(&mut redis_conn, &prefix).await?;
         if keys.is_empty() {
@@ -388,6 +406,15 @@ pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
         pipe.query_async::<()>(&mut redis_conn).await?;
     }
     Ok(())
+}
+
+pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
+    // 踢出用户：删除该用户在 Redis 中的全部会话令牌。
+    // JWT 本身无状态，登出/踢出依赖 Redis 会话（jwt:access:{uid}:{jti}）。
+    let user_id = work_id
+        .parse::<i64>()
+        .map_err(|_| anyhow!("Invalid user id"))?;
+    revoke_user_sessions(user_id).await
 }
 
 /// 用 SCAN 游标分批收集匹配 pattern 的 key（不阻塞 Redis 主线程）。

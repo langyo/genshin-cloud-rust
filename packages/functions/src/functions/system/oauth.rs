@@ -329,7 +329,9 @@ fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
     let window = now / 60;
     let mut map = LOGIN_FAILURES.lock().unwrap();
     sweep_stale_login_failures(&mut map, window);
-    let entry = map.entry(ip.to_string()).or_insert((0, window));
+    // 限流 key 只取 IP（SocketAddr::ip()），不含客户端临时端口：
+    // 端口每次新建连接都不同，含端口会导致每个请求独立计数、限流永不触发。
+    let entry = map.entry(ip.ip().to_string()).or_insert((0, window));
     if entry.1 != window {
         *entry = (0, window);
     }
@@ -346,7 +348,8 @@ fn record_login_failure(ip: SocketAddr) {
     let window = now / 60;
     let mut map = LOGIN_FAILURES.lock().unwrap();
     sweep_stale_login_failures(&mut map, window);
-    let entry = map.entry(ip.to_string()).or_insert((0, window));
+    // 同 check_login_rate_limit：key 仅取 IP 不含临时端口
+    let entry = map.entry(ip.ip().to_string()).or_insert((0, window));
     if entry.1 != window {
         *entry = (0, window);
     }
