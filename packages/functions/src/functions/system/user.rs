@@ -28,6 +28,17 @@ pub async fn do_register(
 ) -> Result<CommonResponse<i64>> {
     let db = &DB_CONN.wait().pg_conn;
 
+    // 注册前查重（应用层）：username 已被占用（未软删）则拒绝，防重复用户名
+    // 落库后 oauth_password_login 的 .one() 按名匹配取到错误账户。
+    let username_taken = sys_user_model::Entity::find_safety()
+        .filter(sys_user_model::Column::Username.eq(&username))
+        .count(db)
+        .await?
+        > 0;
+    if username_taken {
+        return Err(anyhow!("username exists"));
+    }
+
     let now = Utc::now().naive_utc();
     let am = sys_user_model::ActiveModel {
         version: Set(0),
@@ -325,7 +336,7 @@ pub async fn do_list(
         }
     }
 
-    let size = pagination.size.unwrap_or(10) as u64;
+    let size = pagination.size.unwrap_or(10).min(200) as u64;
     let current = pagination.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 

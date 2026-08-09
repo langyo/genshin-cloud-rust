@@ -5,8 +5,13 @@
 //! entity definitions, so it can never drift from the code.
 //!
 //! **On-demand mode**: when all 24 tables already exist the CREATE pass is
-//! skipped entirely ("schema already up to date"). Afterwards it ensures a
-//! dev admin account exists and prints the credentials to stdout.
+//! skipped entirely ("schema already up to date"). Afterwards it applies the
+//! performance indexes from `scripts/indexes_dev.sql` (idempotent), then
+//! ensures a dev admin account exists and prints the credentials to stdout.
+//!
+//! The index SQL file is also the ops source of truth for the production
+//! database — run it manually there (see the file header):
+//!   psql ".../genshin_map" -f scripts/indexes_dev.sql
 //!
 //! Usage (from the workspace root):
 //!   cargo run --bin init_db
@@ -125,7 +130,33 @@ async fn main() -> Result<()> {
         println!("Schema ready: {created} tables ensured in genshin_map");
     }
 
+    // Performance indexes (idempotent). Always runs — also on the on-demand
+    // path, where tables already exist but the indexes may not.
+    ensure_indexes(&db).await?;
+
     ensure_admin_account(&db).await?;
+    Ok(())
+}
+
+/// Apply the performance indexes from `scripts/indexes_dev.sql`
+/// (`CREATE INDEX IF NOT EXISTS`, idempotent). The same file is executed
+/// manually on the production database by ops; see its header comment.
+async fn ensure_indexes(db: &sea_orm::DatabaseConnection) -> Result<()> {
+    // Strip full-line comments, then execute statement by statement.
+    let sql = include_str!("../../../../scripts/indexes_dev.sql")
+        .lines()
+        .filter(|l| {
+            let t = l.trim();
+            !t.is_empty() && !t.starts_with("--")
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    for stmt in sql.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+        db.execute_unprepared(stmt)
+            .await
+            .with_context(|| format!("create index: {stmt}"))?;
+    }
+    println!("Indexes ensured (scripts/indexes_dev.sql)");
     Ok(())
 }
 

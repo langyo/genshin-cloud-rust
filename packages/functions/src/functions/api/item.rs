@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    ExprTrait, QueryFilter, QueryOrder, QuerySelect,
+    ExprTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
     prelude::*,
 };
 
@@ -153,15 +153,17 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
 
     item_model::Entity::update_safety(am)?.exec(db).await?;
 
-    // 类型关联：先逻辑删除旧 link，再按新 typeIdList 插入
+    // 类型关联：先逻辑删除旧 link，再按新 typeIdList 插入。
+    // 删除+插入包事务，失败整体回滚，避免半更新状态（物品已改、类型关联丢失）。
+    let txn = db.begin().await?;
     let old_links = link_model::Entity::find_safety()
         .filter(link_model::Column::ItemId.eq(id))
-        .all(db)
+        .all(&txn)
         .await?;
     for link in old_links {
         let mut lam: link_model::ActiveModel = link.into();
         lam.del_flag = Set(true);
-        link_model::Entity::update_safety(lam)?.exec(db).await?;
+        link_model::Entity::update_safety(lam)?.exec(&txn).await?;
     }
     for t in &p.type_id_list {
         let now = chrono::Utc::now().naive_utc();
@@ -177,8 +179,9 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
             type_id: Set(*t),
             item_id: Set(id),
         };
-        active.insert(db).await?;
+        active.insert(&txn).await?;
     }
+    txn.commit().await?;
     Ok(())
 }
 
@@ -235,7 +238,8 @@ pub async fn do_get_list(
         };
     }
 
-    let size = payload.page.size.unwrap_or(10) as u64;
+    let size_raw = payload.page.size.unwrap_or(10);
+    let size: u64 = (if size_raw > 200 { 200 } else { size_raw }) as u64;
     let current = payload.page.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 

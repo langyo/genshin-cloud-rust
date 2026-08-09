@@ -160,7 +160,8 @@ pub async fn do_get_list(
         }
     }
 
-    let size = payload.page.size.unwrap_or(10) as u64;
+    let size_raw = payload.page.size.unwrap_or(10);
+    let size: u64 = (if size_raw > 200 { 200 } else { size_raw }) as u64;
     let current = payload.page.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 

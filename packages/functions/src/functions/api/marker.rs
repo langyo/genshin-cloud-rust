@@ -3,7 +3,7 @@ use chrono::Utc;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    QuerySelect,
+    QuerySelect, TransactionTrait,
     prelude::*,
 };
 
@@ -553,8 +553,8 @@ async fn tweak_item_list(
     Ok(())
 }
 
-async fn insert_item_link(
-    db: &sea_orm::DatabaseConnection,
+async fn insert_item_link<C: sea_orm::ConnectionTrait>(
+    db: &C,
     marker_id: i64,
     item_id: i64,
     count: i32,
@@ -654,19 +654,22 @@ pub async fn do_update_single(
     marker_model::Entity::update_safety(am)?.exec(db).await?;
 
     // item_list 全量替换（先删后插）：编辑表单始终携带完整 itemList，
-    // 空列表视为清空全部关联。
+    // 空列表视为清空全部关联。删除+插入包事务，失败整体回滚，
+    // 避免留下半更新状态（点位已改、关联已丢）。
+    let txn = db.begin().await?;
     let existing = mil_model::Entity::find_safety()
         .filter(mil_model::Column::MarkerId.eq(payload.id))
-        .all(db)
+        .all(&txn)
         .await?;
     for link in existing {
         mil_model::Entity::delete_safety(link.into())?
-            .exec(db)
+            .exec(&txn)
             .await?;
     }
     for (item_id, count) in parse_item_entries(&payload.item_list) {
-        insert_item_link(db, payload.id, item_id, count).await?;
+        insert_item_link(&txn, payload.id, item_id, count).await?;
     }
+    txn.commit().await?;
 
     super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
@@ -851,7 +854,7 @@ pub async fn do_get_page(
 ) -> Result<CommonResponse<MarkerListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
-    let size = payload.size.unwrap_or(10) as u64;
+    let size = payload.size.unwrap_or(10).min(200) as u64;
     let current = payload.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 

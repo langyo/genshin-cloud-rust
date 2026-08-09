@@ -9,22 +9,29 @@
 //! - sys_user.access_policy: prefixed form round-trips; the 2 unprefixed
 //!   legacy rows (id=194/195) are documented as a P1 gap (ignored test).
 //! - history.content: Java JSON snapshot strings pass through verbatim.
+//! - history.editType: numeric strings '0'|'1'|'2'|'3'|'10' from the frontend.
 //! - marker.position: single "{x},{y}" string on the wire.
+//! - marker.extra: `{"underground":{...}}` opaque Value passthrough.
 //! - notice.channel: JSON array of uppercase channel names.
+//! - notice.validTimeStart/End: ms number and ISO string both accepted.
 //! - marker_linkage.link_action: uppercase enum strings ("TRIGGER_ALL").
+//! - item.iconStyleType: numeric 0-3 from the frontend.
+//! - sys_user_archive.data: dual shape (legacy object array vs JSON string).
 //! - sys_user.password: `{bcrypt}`-prefixed storage (68 chars).
 
 use _database::models::common::notice::ChannelWrapper;
 use _utils::bcrypt;
 use _utils::models::{
     history::HistoryItemVO,
+    item::ItemRequest,
     marker::{MarkerItemLinkVo, MarkerVO},
     marker_link::MarkerLinkVO,
-    notice::{NoticeChannel, NoticeVO},
+    notice::{NoticeAddRequest, NoticeChannel, NoticeVO},
+    system::{ArchiveSlotVo, SysArchiveSlotVo, SysArchiveVo},
 };
 use _utils::types::{
     AccessPolicyItemEnum, AccessPolicyList, HiddenFlag, HistoryEditType, HistoryOperationType,
-    MarkerLinkageLinkAction,
+    IconStyleType, MarkerLinkageLinkAction,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -322,4 +329,325 @@ fn sys_user_password_prefix() {
     assert_eq!(synthetic.len(), 68);
     assert!(bcrypt::verify_password("pw123", &synthetic).expect("verify synthetic row"));
     assert!(!bcrypt::verify_password("nope", &synthetic).expect("verify synthetic row"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. sys_user_archive.data — dual shape: legacy object array vs JSON string
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Mirrors `functions::system::archive::entity_to_slot_vo`: a `data` column
+/// that is a JSON *string* is used as-is; anything else (legacy arrays) is
+/// re-serialized back to text.
+fn read_archive_data(data: &serde_json::Value) -> String {
+    data.as_str()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| serde_json::to_string(data).unwrap_or_default())
+}
+
+/// Mirrors `functions::system::archive::extract_archive` (PUT save body):
+/// a `{time, archive, historyIndex}` wrapper yields its `archive` field,
+/// otherwise the whole body is serialized as the archive text.
+fn extract_archive(body: &serde_json::Value) -> String {
+    body.get("archive")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| serde_json::to_string(body).unwrap_or_default())
+}
+
+#[test]
+fn archive_data_dual_shape() {
+    // 1) New-write shape (audit): data = a JSON string whose *content* is the
+    //    archive JSON text. Read path must yield the inner text verbatim.
+    let inner = r#"{"Data_KYJG":123,"Preference":{},"Time_KYJG":1754280000000}"#;
+    let stored_new = serde_json::Value::String(inner.to_string());
+    assert_eq!(read_archive_data(&stored_new), inner);
+
+    // 2) Legacy shape (audit, 16 rows): data = object array
+    //    `[{"archive":"{...}","time":<str|num>}]` — time mixes strings and
+    //    numbers, but the read path never parses it (opaque passthrough).
+    let legacy = r#"[{"archive":"{\"a\":1}","time":"1754280000000"},{"archive":"{\"a\":2}","time":1754280000001}]"#;
+    let legacy_value: serde_json::Value =
+        serde_json::from_str(legacy).expect("legacy array parses");
+    let read_back: serde_json::Value = serde_json::from_str(&read_archive_data(&legacy_value))
+        .expect("re-serialized data reparses");
+    assert_eq!(
+        read_back, legacy_value,
+        "legacy object-array shape must round-trip through the fallback"
+    );
+
+    // 3) ArchiveSlotVo wire keys (Java contract: slotIndex/time/archive).
+    let vo = ArchiveSlotVo {
+        slot_index: 1,
+        time: 1754280000000.0,
+        archive: inner.to_string(),
+    };
+    let json = serde_json::to_value(&vo).expect("serialize ArchiveSlotVo");
+    assert_eq!(json["slotIndex"], 1);
+    assert_eq!(json["time"], 1754280000000.0_f64);
+    assert_eq!(json["archive"], inner);
+    assert_eq!(
+        serde_json::from_value::<ArchiveSlotVo>(json).expect("deserialize ArchiveSlotVo"),
+        vo
+    );
+
+    // 4) SysArchiveSlotVo grouped shape: {slotIndex, time, updateTime,
+    //    archive: [{time, archive, historyIndex}]} (all_history contract).
+    let group = SysArchiveSlotVo {
+        version: 0,
+        id: 1,
+        name: Some("存档 1".into()),
+        slot_index: 1,
+        create_time: 1754280000000.0,
+        update_time: None,
+        archive: vec![SysArchiveVo {
+            time: 1754280000001.0,
+            archive: inner.to_string(),
+            history_index: 0,
+        }],
+    };
+    let g = serde_json::to_value(&group).expect("serialize SysArchiveSlotVo");
+    assert_eq!(g["slotIndex"], 1);
+    assert_eq!(g["archive"][0]["historyIndex"], 0);
+    assert_eq!(g["archive"][0]["archive"], inner);
+
+    // 5) PUT body compat: wrapper body extracts `archive`; raw body is
+    //    serialized wholesale as the archive text.
+    let wrapped = serde_json::json!({"time": 1754280000000.0, "archive": inner, "historyIndex": 0});
+    assert_eq!(extract_archive(&wrapped), inner);
+    let raw = serde_json::json!({"Data_KYJG": 123});
+    let extracted = extract_archive(&raw);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&extracted).expect("raw body round-trips"),
+        raw
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. notice.validTimeStart/End — ms number and ISO string both accepted
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Mirrors the documented parse in `functions::api::notice::parse_valid_time`:
+/// ms number → timestamp; ISO / naive datetime strings → parsed; garbage → `now`.
+fn parse_valid_time(
+    value: Option<&serde_json::Value>,
+    now: chrono::NaiveDateTime,
+) -> Option<chrono::NaiveDateTime> {
+    match value {
+        None | Some(serde_json::Value::Null) => None,
+        Some(v) => Some(if let Some(ms) = v.as_f64() {
+            chrono::DateTime::from_timestamp_millis(ms as i64)
+                .map(|dt| dt.naive_utc())
+                .unwrap_or(now)
+        } else if let Some(s) = v.as_str() {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .map(|dt| dt.naive_utc())
+                .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f"))
+                .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S"))
+                .unwrap_or(now)
+        } else {
+            now
+        }),
+    }
+}
+
+#[test]
+fn notice_valid_time_parse() {
+    // Frontend el-date-picker may serialize validTimeStart/End as either an
+    // epoch-ms number or an ISO string; the request model keeps both raw.
+    let req_num = r#"{"channel":["COMMON"],"content":"<p>x</p>","title":"t","sortIndex":0,"validTimeStart":1754280000000,"validTimeEnd":null}"#;
+    let req_num: NoticeAddRequest =
+        serde_json::from_str(req_num).expect("ms-number validTimeStart deserializes");
+    assert_eq!(
+        req_num.valid_time_start,
+        Some(serde_json::json!(1754280000000i64)),
+        "ms number stays a JSON number"
+    );
+    assert_eq!(req_num.valid_time_end, None, "JSON null maps to None");
+
+    let req_iso = r#"{"channel":["COMMON"],"content":"<p>x</p>","title":"t","validTimeStart":"2025-08-04T04:00:00.000Z"}"#;
+    let req_iso: NoticeAddRequest =
+        serde_json::from_str(req_iso).expect("ISO-string validTimeStart deserializes");
+    assert!(
+        req_iso.valid_time_start.as_ref().expect("some").is_string(),
+        "ISO string stays a JSON string"
+    );
+    assert_eq!(req_iso.sort_index, 0, "missing sortIndex defaults to 0");
+
+    // Both forms denote the same instant through the documented parse logic.
+    let now = chrono::Utc::now().naive_utc();
+    let expect = chrono::DateTime::from_timestamp_millis(1754280000000i64)
+        .expect("valid epoch ms")
+        .naive_utc();
+    assert_eq!(
+        parse_valid_time(req_num.valid_time_start.as_ref(), now),
+        Some(expect)
+    );
+    assert_eq!(
+        parse_valid_time(req_iso.valid_time_start.as_ref(), now),
+        Some(expect),
+        "ISO string and ms number must parse to the same instant"
+    );
+
+    // null / absent → None (column stays NULL); garbage → fallback `now`.
+    assert_eq!(parse_valid_time(None, now), None);
+    assert_eq!(parse_valid_time(Some(&serde_json::Value::Null), now), None);
+    assert_eq!(
+        parse_valid_time(Some(&serde_json::json!("not-a-date")), now),
+        Some(now)
+    );
+    assert_eq!(
+        parse_valid_time(Some(&serde_json::json!(true)), now),
+        Some(now)
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. history.editType — numeric strings '0'|'1'|'2'|'3'|'10' from the frontend
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn history_edit_type_string() {
+    // Frontend sends editType as numeric *strings* (audit: edit_type values
+    // {2,3,10} in the DB); the enum deserializer must accept them.
+    for (wire, expected) in [
+        ("0", HistoryEditType::Unknown),
+        ("1", HistoryEditType::Added),
+        ("2", HistoryEditType::Modified),
+        ("3", HistoryEditType::Deleted),
+        ("10", HistoryEditType::Initialized),
+    ] {
+        let parsed: HistoryEditType =
+            serde_json::from_str(&format!("\"{wire}\"")).expect("numeric string deserializes");
+        assert_eq!(parsed, expected);
+        // Serializes back to the Java numeric contract (frontend consumes
+        // numbers).
+        assert_eq!(
+            serde_json::to_string(&parsed).expect("serialize"),
+            wire,
+            "numeric-string wire form round-trips"
+        );
+    }
+
+    // Through the HistoryItemVO `editType` field (real list-query wire shape).
+    let vo: HistoryItemVO = serde_json::from_value(serde_json::json!({
+        "version": 0,
+        "id": 58502,
+        "createTime": 0.0,
+        "updateTime": null,
+        "creatorId": 46,
+        "updaterId": null,
+        "delFlag": false,
+        "md5": null,
+        "ipv4": null,
+        "tid": 49232,
+        "type": 4,
+        "editType": "10",
+        "content": "{}"
+    }))
+    .expect("HistoryItemVO with string editType deserializes");
+    assert_eq!(vo.edit_type, HistoryEditType::Initialized);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10. item.iconStyleType — numeric 0-3 from the frontend
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn item_icon_style_numeric() {
+    // Frontend sends iconStyleType as numbers (audit: item rows with
+    // icon_style_type values {0,1,3}).
+    for (num, expected) in [
+        (0, IconStyleType::Default),
+        (1, IconStyleType::NoBorder),
+        (2, IconStyleType::LikeOculus),
+        (3, IconStyleType::Oculus),
+    ] {
+        let parsed: IconStyleType =
+            serde_json::from_str(&num.to_string()).expect("numeric iconStyleType deserializes");
+        assert_eq!(parsed, expected);
+        assert_eq!(
+            serde_json::to_string(&parsed).expect("serialize"),
+            num.to_string(),
+            "numeric form round-trips"
+        );
+    }
+
+    // Through the ItemRequest model (real audited row: icon_style_type=3).
+    let req: ItemRequest = serde_json::from_value(serde_json::json!({
+        "name": "散失的风神瞳",
+        "areaId": 6,
+        "defaultRefreshTime": 0,
+        "defaultContent": null,
+        "defaultCount": 1,
+        "iconId": 4,
+        "iconStyleType": 3,
+        "hiddenFlag": 0,
+        "sortIndex": 99,
+        "specialFlag": null
+    }))
+    .expect("ItemRequest with numeric iconStyleType deserializes");
+    assert_eq!(req.icon_style_type, IconStyleType::Oculus);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 11. marker.extra — `{"underground":{...}}` opaque Value passthrough
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn marker_extra_underground() {
+    // Real DB shape (audit, non-empty marker.extra): the backend treats extra
+    // as an opaque serde_json::Value — it must survive MarkerVO serialization
+    // structurally identical and deserialize back unchanged.
+    let extra = serde_json::json!({
+        "underground": {
+            "is_underground": true,
+            "region_levels": ["ECHO_CHILD_SETTLEMENT"]
+        }
+    });
+
+    let vo = MarkerVO {
+        version: 0,
+        id: 66181,
+        create_time: 0.0,
+        update_time: None,
+        creator_id: None,
+        updater_id: None,
+        del_flag: false,
+        marker_stamp: None,
+        marker_title: Some("风滚草".into()),
+        position: "-7507.75,2244.25".into(),
+        content: Some("风滚草".into()),
+        picture: Some(String::new()),
+        marker_creator_id: 28,
+        picture_creator_id: Some(0),
+        video_path: Some(String::new()),
+        refresh_time: 43200000,
+        hidden_flag: HiddenFlag::Visible,
+        extra: Some(extra.clone()),
+        item_list: vec![MarkerItemLinkVo {
+            item_id: 2992,
+            count: 1,
+            icon_tag: None,
+            icon_id: 0,
+        }],
+        linkage_id: None,
+    };
+
+    let json = serde_json::to_value(&vo).expect("serialize MarkerVO");
+    assert_eq!(
+        json["extra"], extra,
+        "extra must pass through as an opaque JSON object"
+    );
+    assert_eq!(
+        json["extra"]["underground"]["is_underground"], true,
+        "nested underground payload is preserved"
+    );
+
+    let back: MarkerVO = serde_json::from_value(json).expect("deserialize MarkerVO");
+    assert_eq!(back.extra, Some(extra));
+
+    // extra NULL (141 audited rows) stays null on the wire.
+    let no_extra = MarkerVO { extra: None, ..vo };
+    let j = serde_json::to_value(&no_extra).expect("serialize MarkerVO without extra");
+    assert!(j["extra"].is_null(), "missing extra serializes as null");
 }

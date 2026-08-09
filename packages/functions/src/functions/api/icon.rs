@@ -42,6 +42,7 @@ pub async fn do_add(auth: AuthInfo, payload: IconAddRequest) -> Result<CommonRes
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(res.id)))
 }
 
@@ -84,6 +85,7 @@ pub async fn do_list(
     if let Some(current) = payload.page.current
         && let Some(size) = payload.page.size
     {
+        let size = size.min(200);
         let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
         select = select.limit(size as u64).offset(offset);
     }
@@ -131,6 +133,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
     icon_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -147,6 +150,7 @@ pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<Com
     icon_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(())))
 }
 

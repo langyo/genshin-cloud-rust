@@ -45,6 +45,7 @@ pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResp
     };
 
     let res = tag_model::Entity::insert(am).exec(db).await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(TagAddResponse {
         id: res.last_insert_id,
     })
@@ -68,6 +69,7 @@ pub async fn do_update(
     am.icon_id = Set(payload.base.icon_id);
 
     tag_model::Entity::update_safety(am)?.exec(db).await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -105,7 +107,7 @@ pub async fn do_list(
         }
     }
 
-    let size = payload.page.size.unwrap_or(10) as u64;
+    let size = payload.page.size.unwrap_or(10).min(200) as u64;
     let current = payload.page.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
@@ -143,6 +145,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
     let mut am: tag_model::ActiveModel = t.into();
     am.del_flag = Set(true);
     tag_model::Entity::delete_safety(am)?.exec(db).await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -190,6 +193,7 @@ pub async fn do_update_type(
         .await?;
     }
 
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
@@ -223,6 +227,7 @@ pub async fn do_create_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
     })
     .exec(db)
     .await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
@@ -239,6 +244,7 @@ pub async fn do_delete_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
     let mut am: tag_model::ActiveModel = t.into();
     am.del_flag = Set(true);
     tag_model::Entity::delete_safety(am)?.exec(db).await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
@@ -259,6 +265,7 @@ pub async fn do_update_by_name(
     let mut am: tag_model::ActiveModel = t.into();
     am.icon_id = Set(icon_id);
     tag_model::Entity::update_safety(am)?.exec(db).await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
