@@ -287,7 +287,7 @@ pub async fn do_tweak(
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
-    let mut touched_ids: Vec<i64> = Vec::new();
+    let touched_ids: Vec<i64> = Vec::new();
     for payload in payloads {
         for marker_id in payload.marker_ids.iter() {
             let m = marker_model::Entity::find_safety_by_id(*marker_id)
@@ -403,10 +403,8 @@ pub async fn do_tweak(
 
             // 通过 ActiveModelBehavior 设置 updater 与 update_time；确保携带版本信息
             marker_model::Entity::update_safety(am)?.exec(db).await?;
-            touched_ids.push(*marker_id);
         }
     }
-
     // 返回被修改 marker 的 VO 列表
     if touched_ids.is_empty() {
         return Ok(CommonResponse::new(Ok(vec![])));
@@ -598,7 +596,7 @@ pub async fn do_add_single(
 
         marker_title: Set(Some(payload.marker_title)),
         position: Set(payload.position),
-        content: Set(payload.content),
+        content: Set(payload.content.or(Some(String::new()))),
         picture: Set(payload.picture),
         marker_creator_id: Set(payload.marker_creator_id),
         picture_creator_id: Set(payload.picture_creator_id),

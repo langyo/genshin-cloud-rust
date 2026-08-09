@@ -46,7 +46,7 @@ pub async fn do_register(
         logo: Set(logo),
         role_id: Set(role_id.unwrap_or(SystemUserRole::MapUser)),
         access_policy: Set(access_policy.map(_utils::types::AccessPolicyList)),
-        remark: Set(remark),
+        remark: Set(Some(remark.unwrap_or_default())),
     };
 
     let res = sys_user_model::Entity::insert(am).exec(db).await?;
@@ -103,7 +103,7 @@ pub async fn do_register_qq(
         // 公开接口：不信任客户端传入的角色，固定注册为地图用户
         role_id: Set(SystemUserRole::MapUser),
         access_policy: Set(access_policy.map(_utils::types::AccessPolicyList)),
-        remark: Set(remark),
+        remark: Set(Some(remark.unwrap_or_default())),
     };
 
     let res = sys_user_model::Entity::insert(am).exec(db).await?;

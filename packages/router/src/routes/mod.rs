@@ -97,6 +97,19 @@ fn cdn_upstream() -> String {
         .to_string()
 }
 
+/// 从 URL 字符串中提取 host（小写、去 userinfo、去端口）；解析失败返回 None。
+/// 简单字符串解析即可满足白名单精确匹配，无需引入 url crate。
+fn url_host(url: &str) -> Option<String> {
+    let rest = url.split_once("://")?.1;
+    let host = rest.split(['/', '?', '#']).next().unwrap_or(rest);
+    let host = host.rsplit('@').next().unwrap_or(host);
+    let host = host.split(':').next().unwrap_or(host);
+    if host.is_empty() {
+        return None;
+    }
+    Some(host.to_ascii_lowercase())
+}
+
 /// 本地 dadian 配置文件路径（`CDN_DADIAN_CONFIG`，可选）。
 /// 指向一个预生成的 bz2 压缩配置；未设置时 `/cdn/dadian-preview.json.bz2`
 /// 降级为内置的空配置（开发期行为）。
@@ -166,10 +179,32 @@ fn cdn_proxy() -> axum::Router {
                     // Image proxy: forward to the icon host with wildcard CORS
                     // (the dev MinIO on ddns.minemc.top sends no CORS headers,
                     // which breaks the frontend sprite renderer).
+                    // SSRF 防护：`u` 只能是白名单内的上游 host（图标/资源站 +
+                    // CDN_UPSTREAM 配置的 host），其余一律 403，防止抓取内网
+                    // 地址（169.254.169.254 等）或任意外部站点。
                     if let Some(query) = req.uri().query()
                         && let Some(u) = query.split('&').find_map(|kv| kv.strip_prefix("u="))
                     {
                         let decoded = urlencoding::decode(u).unwrap_or_default().into_owned();
+                        let host = url_host(&decoded);
+                        let upstream_host = url_host(&upstream);
+                        let allowed: [&str; 4] = [
+                            "ddns.minemc.top",
+                            "assets.yuanshen.site",
+                            "tiles.yuanshen.site",
+                            "v3.yuanshen.site",
+                        ];
+                        let host_allowed = host.as_deref().is_some_and(|h| {
+                            allowed.contains(&h) || upstream_host.as_deref() == Some(h)
+                        });
+                        if !host_allowed {
+                            return Response::builder()
+                                .status(403)
+                                .header("Access-Control-Allow-Origin", "*")
+                                .body(axum::body::Body::from("host not allowed"))
+                                .unwrap()
+                                .into_response();
+                        }
                         match client.get(&decoded).send().await {
                             Ok(resp) => {
                                 let body = resp.bytes().await.unwrap_or_default();
