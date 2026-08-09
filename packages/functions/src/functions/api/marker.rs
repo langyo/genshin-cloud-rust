@@ -311,7 +311,7 @@ pub async fn do_tweak(
             for tweak in payload.tweaks.iter() {
                 match groups.iter_mut().find(|(prop, _)| *prop == tweak.prop) {
                     Some((_, list)) => list.push(tweak),
-                    None => groups.push((tweak.prop, vec![tweak])),
+                    None => groups.push((tweak.prop.clone(), vec![tweak])),
                 }
             }
 
