@@ -909,9 +909,12 @@ async fn area_and_item_doc_business_assertions() {
     .expect("get score data ok");
     let samples = data.as_array().expect("samples array");
     assert_eq!(samples.len(), 1, "one sample returned");
+    let fields = samples[0]["data"]["fields"]
+        .as_object()
+        .expect("fields map");
     assert_eq!(
-        samples[0]["score"].as_f64().unwrap(),
-        4.0,
+        fields.get("content").and_then(|v| v.as_i64()).unwrap_or(0),
+        4,
         "score read back from content"
     );
 
