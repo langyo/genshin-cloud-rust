@@ -37,8 +37,6 @@ pub struct UserRegisterQQParams {
     pub logo: Option<String>,
     /// 备注
     pub remark: Option<String>,
-    /// 角色列表
-    pub role_id: Option<SystemUserRole>,
     /// 用户名
     pub username: String,
     /// 初始密码
@@ -122,11 +120,11 @@ pub struct UserKickOutParams {
     pub work_id: String,
 }
 
-/// 注册用户
+/// 注册用户（仅管理员）
 /// POST /user/register
 #[tracing::instrument(skip(auth, payload))]
 pub async fn register(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserRegisterParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(Json(
@@ -145,20 +143,17 @@ pub async fn register(
     .into_response())
 }
 
-/// 用QQ注册用户
+/// 用QQ注册用户（公开接口：QQ 授权后未登录调用）
 /// POST /user/register/qq
-#[tracing::instrument(skip(auth, payload))]
+#[tracing::instrument(skip(payload))]
 pub async fn register_qq(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserRegisterQQParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(Json(
         do_register_qq(
-            auth,
             payload.access_policy,
             payload.logo,
             payload.remark,
-            payload.role_id,
             payload.username,
             payload.password,
             payload.qq,

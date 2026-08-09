@@ -91,6 +91,56 @@ pub enum UserSort {
     NicknameReverse,
 }
 
+/// Sort keys for the user device list（wire 契约与 UserSort 一致：字段+ 升序 / 字段- 降序）。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+pub enum DeviceSort {
+    #[serde(rename = "deviceId+")]
+    DeviceId,
+    #[serde(rename = "deviceId-")]
+    DeviceIdReverse,
+    #[serde(rename = "id+")]
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
+    #[serde(rename = "ipv4+")]
+    Ipv4,
+    #[serde(rename = "ipv4-")]
+    Ipv4Reverse,
+    #[serde(rename = "lastLoginTime+")]
+    LastLoginTime,
+    #[serde(rename = "lastLoginTime-")]
+    LastLoginTimeReverse,
+    #[serde(rename = "status+")]
+    Status,
+    #[serde(rename = "status-")]
+    StatusReverse,
+    #[serde(rename = "updateTime+")]
+    UpdateTime,
+    #[serde(rename = "updateTime-")]
+    UpdateTimeReverse,
+}
+
+/// Sort keys for the user invitation list（wire 契约：createTime± / id± / updateTime± / username±）。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+pub enum InvitationSort {
+    #[serde(rename = "createTime+")]
+    CreateTime,
+    #[serde(rename = "createTime-")]
+    CreateTimeReverse,
+    #[serde(rename = "id+")]
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
+    #[serde(rename = "updateTime+")]
+    UpdateTime,
+    #[serde(rename = "updateTime-")]
+    UpdateTimeReverse,
+    #[serde(rename = "username+")]
+    Username,
+    #[serde(rename = "username-")]
+    UsernameReverse,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum SystemUserRole {

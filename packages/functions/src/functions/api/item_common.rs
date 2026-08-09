@@ -25,7 +25,7 @@ use _database::{
     models::{area::item_area_public as iap_model, item::item as item_model},
 };
 
-use super::item::{item_to_vo, type_id_map};
+use super::item::{item_to_vo, marker_count_map, type_id_map};
 
 /// 批量添加上限（防恶意大列表）。
 const MAX_BATCH: usize = 1000;
@@ -67,11 +67,12 @@ pub async fn do_get_list(
     let mut arr = Vec::with_capacity(links.len());
     let type_map = type_id_map(db).await?;
     let icon_tag_map = super::icon::icon_tag_map(db).await?;
+    let count_map = marker_count_map(db).await?;
     for link in links {
         if let Some(it) = by_id.get(&link.item_id) {
             arr.push(ItemAreaPublicVo {
                 item_id: it.id,
-                item: item_to_vo(it, &type_map, &icon_tag_map),
+                item: item_to_vo(it, &type_map, &icon_tag_map, &count_map),
             });
         }
     }

@@ -147,7 +147,6 @@ pub(crate) fn model_to_vo_doc(
 }
 
 /// 文本类 tweak 的"新值"：meta.replace 优先，其次 meta.value 中的 String。
-/// 注意 TweakMeta 没有 remove/preserve 字段，trim/remove 的待处理子串同样取此值。
 fn tweak_text_value(tweak: &_utils::models::marker::MarkerTweakConfig) -> Option<String> {
     if let Some(v) = &tweak.meta.replace {
         return Some(v.clone());
@@ -158,47 +157,101 @@ fn tweak_text_value(tweak: &_utils::models::marker::MarkerTweakConfig) -> Option
     None
 }
 
-/// 按 tweak 类型计算文本字段（title/content）的新值（最小可行语义）：
-/// - Replace：整值替换（默认，前端标题编辑）
+/// 文本类 tweak 的"检查文本"（待匹配/待处理子串）：meta.test 优先，其次 meta.value 中的 String。
+/// 前端 RemoveLeft/RemoveRight/TrimLeft/TrimRight 只发 test（待处理子串），
+/// Replace/Update/ReplaceRegex 的条件替换同样使用 test。
+fn tweak_text_needle(tweak: &_utils::models::marker::MarkerTweakConfig) -> Option<String> {
+    if let Some(v) = &tweak.meta.test {
+        return Some(v.clone());
+    }
+    if let Some(_utils::models::marker::TweakValue::String(s)) = &tweak.meta.value {
+        return Some(s.clone());
+    }
+    None
+}
+
+/// 按 tweak 类型计算文本字段（title/content）的新值：
+/// - Update：条件编辑 —— meta.test 命中（origin 包含 test）时，将 test 的全部出现处
+///   替换为 meta.replace（或 value），未命中返回 None（不修改）；test 缺失时按 Replace 整值替换
+/// - Replace：meta.test 存在时 replaceAll（origin 中所有 test 出现处 → 新值）；
+///   test 缺失时整值替换（默认，前端标题编辑）
+/// - ReplaceRegex：无 regex 依赖，以字面量替换近似（test → 新值，全部出现），test 缺失忽略
 /// - Prepend / Append：新值 + 原值 / 原值 + 新值
-/// - RemoveLeft / RemoveRight：移除边缘（前缀/后缀）的单次子串，未命中则保持原值
-/// - TrimLeft / TrimRight：剥离边缘的重复子串
-/// - ReplaceRegex：当前无 regex 依赖，保持忽略（与 item_list 分支一致）
-/// - ���ɸ��ı��ֶ������壬���� None�����޸ģ���
+/// - RemoveLeft / RemoveRight：从开头/结尾移除 test（或 value）子串一次，未命中保持原值
+/// - TrimLeft / TrimRight：剥离开头/结尾重复出现的 test（或 value）子串
+/// - 其余类型（InsertIfAbsent/InsertOrUpdate/Merge 等）对文本字段无意义，返回 None（不修改）
 fn apply_text_tweak(
     tweak: &_utils::models::marker::MarkerTweakConfig,
     origin: Option<String>,
 ) -> Option<String> {
     let origin = origin.unwrap_or_default();
     match tweak.marker_tweak_config_type {
-        _utils::models::marker::MarkerTweakConfigTypeEnum::Replace => tweak_text_value(tweak),
+        _utils::models::marker::MarkerTweakConfigTypeEnum::Replace => {
+            if let Some(needle) = tweak_text_needle(tweak)
+                && !needle.is_empty()
+                && let Some(rep) = tweak_text_value(tweak)
+            {
+                Some(origin.replace(needle.as_str(), rep.as_str()))
+            } else {
+                tweak_text_value(tweak)
+            }
+        },
+        _utils::models::marker::MarkerTweakConfigTypeEnum::Update => {
+            if let Some(needle) = tweak_text_needle(tweak)
+                && !needle.is_empty()
+            {
+                if origin.contains(needle.as_str()) {
+                    let rep = tweak_text_value(tweak)?;
+                    Some(origin.replace(needle.as_str(), rep.as_str()))
+                } else {
+                    None
+                }
+            } else {
+                tweak_text_value(tweak)
+            }
+        },
+        // 无 regex 依赖：以字面量字符串替换近似（与 Replace 带 test 时语义一致）
+        _utils::models::marker::MarkerTweakConfigTypeEnum::ReplaceRegex => {
+            if let Some(needle) = tweak_text_needle(tweak)
+                && !needle.is_empty()
+                && let Some(rep) = tweak_text_value(tweak)
+            {
+                Some(origin.replace(needle.as_str(), rep.as_str()))
+            } else {
+                None
+            }
+        },
         _utils::models::marker::MarkerTweakConfigTypeEnum::Prepend => {
             tweak_text_value(tweak).map(|v| v + &origin)
         },
         _utils::models::marker::MarkerTweakConfigTypeEnum::Append => {
             tweak_text_value(tweak).map(|v| origin + &v)
         },
-        _utils::models::marker::MarkerTweakConfigTypeEnum::RemoveLeft => tweak_text_value(tweak)
-            .map(|v| {
+        _utils::models::marker::MarkerTweakConfigTypeEnum::RemoveLeft => {
+            let needle = tweak_text_needle(tweak)?;
+            Some(
                 origin
-                    .strip_prefix(v.as_str())
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| origin.clone())
-            }),
-        _utils::models::marker::MarkerTweakConfigTypeEnum::RemoveRight => tweak_text_value(tweak)
-            .map(|v| {
+                    .strip_prefix(needle.as_str())
+                    .unwrap_or(origin.as_str())
+                    .to_owned(),
+            )
+        },
+        _utils::models::marker::MarkerTweakConfigTypeEnum::RemoveRight => {
+            let needle = tweak_text_needle(tweak)?;
+            Some(
                 origin
-                    .strip_suffix(v.as_str())
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| origin.clone())
-            }),
+                    .strip_suffix(needle.as_str())
+                    .unwrap_or(origin.as_str())
+                    .to_owned(),
+            )
+        },
         _utils::models::marker::MarkerTweakConfigTypeEnum::TrimLeft => {
-            tweak_text_value(tweak).map(|v| origin.trim_start_matches(v.as_str()).to_owned())
+            tweak_text_needle(tweak).map(|n| origin.trim_start_matches(n.as_str()).to_owned())
         },
         _utils::models::marker::MarkerTweakConfigTypeEnum::TrimRight => {
-            tweak_text_value(tweak).map(|v| origin.trim_end_matches(v.as_str()).to_owned())
+            tweak_text_needle(tweak).map(|n| origin.trim_end_matches(n.as_str()).to_owned())
         },
-        // ReplaceRegex 等其余类型：对文本字段暂不支持，忽略
+        // InsertIfAbsent / InsertOrUpdate / Merge 等其余类型：对文本字段无意义，忽略
         _ => None,
     }
 }

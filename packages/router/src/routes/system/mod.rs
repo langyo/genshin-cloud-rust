@@ -15,10 +15,12 @@ use axum::{
 };
 
 pub async fn router() -> Result<Router> {
-    // /invitation/consume 是公开接口（注册流程未登录调用），不挂 auth layer；
-    // 其余路由合并到一个挂 ExtractAuthInfo layer 的 router 中。
+    // /invitation/consume 与 /user/register/qq 是公开接口（注册流程未登录
+    // 调用），不挂 auth layer；其余路由合并到一个挂 ExtractAuthInfo layer 的
+    // router 中。
     let ret = Router::new()
         .route("/invitation/consume", post(invitation::consume))
+        .route("/user/register/qq", post(user::register_qq))
         .merge(
             Router::new()
                 .route("/archive/last/{slot_index}", get(archive::get_last))
@@ -41,7 +43,6 @@ pub async fn router() -> Result<Router> {
                 .route("/invitation/{invitation_id}", delete(invitation::delete))
                 .route("/role/list", get(role::list))
                 .route("/user/register", post(user::register))
-                .route("/user/register/qq", post(user::register_qq))
                 .route("/user/info/{user_id}", get(user::get_info))
                 .route("/user/update", post(user::update))
                 .route("/user/update_password", post(user::update_password))

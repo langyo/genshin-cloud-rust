@@ -55,7 +55,7 @@ pub async fn do_update(
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
-// 将一组 item_id 移动到目标类型（更新 link 表的 type_id）
+// 将一组类型（typeId 列表）移动到目标类型下（更新 item_type.parent_id）
 pub async fn do_move_to_target(
     _auth: AuthInfo,
     target_type_id: i64,
@@ -71,20 +71,24 @@ pub async fn do_move_to_target(
             ));
         }
     }
-    for item_id in payload {
-        // 查找 link 记录（末端类型）
-        let links = link_model::Entity::find_safety()
-            .filter(link_model::Column::ItemId.eq(item_id))
-            .all(&DB_CONN.wait().pg_conn)
-            .await?;
-
-        for link in links {
-            let mut lam: link_model::ActiveModel = link.into();
-            lam.type_id = Set(target_type_id);
-            link_model::Entity::update_safety(lam)?
-                .exec(&DB_CONN.wait().pg_conn)
-                .await?;
-        }
+    let db = &DB_CONN.wait().pg_conn;
+    // 校验目标类型存在
+    if item_type_model::Entity::find_safety_by_id(target_type_id)
+        .one(db)
+        .await?
+        .is_none()
+    {
+        return Err(anyhow!("ItemType not found: {target_type_id}"));
+    }
+    for type_id in payload {
+        // 把 typeId 移动到新父级：更新 parent_id（不再改写 link 表的 type_id）
+        let item = item_type_model::Entity::find_safety_by_id(type_id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("ItemType not found: {type_id}"))?;
+        let mut am: item_type_model::ActiveModel = item.into();
+        am.parent_id = Set(target_type_id);
+        item_type_model::Entity::update_safety(am)?.exec(db).await?;
     }
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
@@ -176,15 +180,64 @@ pub async fn do_get_list_all(_auth: AuthInfo) -> Result<CommonResponse<ItemTypeA
 // 逻辑删除类型
 pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
-    let item = item_type_model::Entity::find_safety_by_id(id)
-        .one(&DB_CONN.wait().pg_conn)
+    let db = &DB_CONN.wait().pg_conn;
+
+    // 一次性加载全部未删除类型，BFS 收集自身及全部后代
+    let all = item_type_model::Entity::find_safety().all(db).await?;
+    let root = all
+        .iter()
+        .find(|t| t.id == id)
+        .ok_or(anyhow!("ItemType not found"))?;
+    let root_parent_id = root.parent_id;
+    let mut children: std::collections::HashMap<i64, Vec<i64>> = std::collections::HashMap::new();
+    for t in &all {
+        children.entry(t.parent_id).or_default().push(t.id);
+    }
+    let mut to_delete: Vec<i64> = Vec::new();
+    let mut queue: Vec<i64> = vec![id];
+    while let Some(cur) = queue.pop() {
+        to_delete.push(cur);
+        if let Some(cs) = children.get(&cur) {
+            queue.extend(cs.iter().copied());
+        }
+    }
+
+    // 软删自身与所有后代
+    for tid in &to_delete {
+        if let Some(model) = all.iter().find(|t| t.id == *tid) {
+            item_type_model::Entity::delete_safety(model.clone().into())?
+                .exec(db)
+                .await?;
+        }
+    }
+
+    // 清理这些类型下的 item_type_link（软删）
+    link_model::Entity::update_many()
+        .col_expr(
+            link_model::Column::DelFlag,
+            sea_orm::sea_query::Expr::value(true),
+        )
+        .filter(link_model::Column::TypeId.is_in(to_delete.iter().copied()))
+        .exec(db)
         .await?;
-    let item = item.ok_or(anyhow!("ItemType not found"))?;
-    let mut am: item_type_model::ActiveModel = item.into();
-    am.del_flag = Set(true);
-    item_type_model::Entity::delete_safety(am)?
-        .exec(&DB_CONN.wait().pg_conn)
-        .await?;
+
+    // is_final 重算：被删类型的父级若再无子级，恢复为末端类型
+    if let Some(parent) = item_type_model::Entity::find_safety_by_id(root_parent_id)
+        .one(db)
+        .await?
+    {
+        let remain = item_type_model::Entity::find_safety()
+            .filter(item_type_model::Column::ParentId.eq(parent.id))
+            .count(db)
+            .await?;
+        if remain == 0 {
+            let mut pam: item_type_model::ActiveModel = parent.into();
+            pam.is_final = Set(true);
+            item_type_model::Entity::update_safety(pam)?
+                .exec(db)
+                .await?;
+        }
+    }
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 

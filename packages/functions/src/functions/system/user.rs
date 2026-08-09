@@ -53,13 +53,10 @@ pub async fn do_register(
     Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn do_register_qq(
-    _auth: AuthInfo,
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
     logo: Option<String>,
     remark: Option<String>,
-    role_id: Option<SystemUserRole>,
     username: String,
     password: String,
     qq: Option<String>,
@@ -82,7 +79,8 @@ pub async fn do_register_qq(
         qq: Set(qq),
         phone: Set(None),
         logo: Set(logo),
-        role_id: Set(role_id.unwrap_or(SystemUserRole::MapUser)),
+        // 公开接口：不信任客户端传入的角色，固定注册为地图用户
+        role_id: Set(SystemUserRole::MapUser),
         access_policy: Set(access_policy.map(_utils::types::AccessPolicyList)),
         remark: Set(remark),
     };
@@ -102,7 +100,7 @@ pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     id: i64,
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
     logo: Option<String>,
@@ -113,6 +111,11 @@ pub async fn do_update(
     role_id: Option<SystemUserRole>,
 ) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
+    // 权限校验：仅 Admin 可修改他人资料；普通用户只能改自己。
+    let is_admin = auth.info.role_id == SystemUserRole::Admin;
+    if !is_admin && auth.info.id != id {
+        return Err(anyhow!("Forbidden: only admins can update other users"));
+    }
     let m = sys_user_model::Entity::find_safety_by_id(id)
         .one(db)
         .await?;
@@ -138,7 +141,10 @@ pub async fn do_update(
         am.remark = Set(Some(r));
     }
     if let Some(rid) = role_id {
-        am.role_id = Set(rid);
+        // 角色变更仅 Admin 可操作；普通用户改自己时忽略传入的 role_id（防自提权限）
+        if is_admin {
+            am.role_id = Set(rid);
+        }
     }
 
     sys_user_model::Entity::update_safety(am)?.exec(db).await?;

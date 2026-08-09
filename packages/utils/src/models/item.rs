@@ -86,8 +86,9 @@ pub struct ItemUpdateData {
     /// 地区 ID
     pub area_id: i64,
     /// 默认描述模板
+    /// 前端旧数据可能传 null，缺失或 null 均接受
     #[serde(default)]
-    pub default_content: String,
+    pub default_content: Option<String>,
     /// 默认点位计数
     #[serde(default)]
     pub default_count: i64,
@@ -197,6 +198,12 @@ pub struct ItemVO {
     /// 前端按类型过滤/分组物品，缺失会导致筛选面板恒空。
     #[serde(default)]
     pub type_id_list: Vec<i64>,
+    /// 点位数量（`marker_item_link` 计数），Java `ItemVo.count`
+    #[serde(default)]
+    pub count: Option<i64>,
+    /// 点位数量分组（Java `ItemVo.countSplit`；暂未实现，恒为 null）
+    #[serde(default)]
+    pub count_split: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

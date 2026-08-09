@@ -1,5 +1,7 @@
 //! User invitation business logic — mirrors Java `SysUserInvitationService`.
 
+use std::collections::HashSet;
+
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::{
@@ -17,7 +19,7 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{SysUserInvitationVo, wrapper::CommonResponse},
-    types::{AccessPolicyList, SystemUserRole},
+    types::{AccessPolicyList, InvitationSort, SystemUserRole},
 };
 
 /// List invitations with optional filtering by code / username.
@@ -25,6 +27,7 @@ pub async fn do_list(
     _auth: AuthInfo,
     code: Option<String>,
     username: Option<String>,
+    sort: Option<Vec<InvitationSort>>,
     size: u64,
     current: u64,
 ) -> Result<CommonResponse<serde_json::Value>> {
@@ -38,9 +41,32 @@ pub async fn do_list(
         query = query.filter(inv_model::Column::Username.eq(u));
     }
 
+    // 排序：显式枚举映射，变体重命名会变成编译错误而非静默忽略排序键。
+    if let Some(sorts) = sort {
+        use sea_orm::QueryOrder;
+        for s in sorts {
+            let (column, desc) = match s {
+                InvitationSort::CreateTime => (inv_model::Column::CreateTime, false),
+                InvitationSort::CreateTimeReverse => (inv_model::Column::CreateTime, true),
+                InvitationSort::Id => (inv_model::Column::Id, false),
+                InvitationSort::IdReverse => (inv_model::Column::Id, true),
+                InvitationSort::UpdateTime => (inv_model::Column::UpdateTime, false),
+                InvitationSort::UpdateTimeReverse => (inv_model::Column::UpdateTime, true),
+                InvitationSort::Username => (inv_model::Column::Username, false),
+                InvitationSort::UsernameReverse => (inv_model::Column::Username, true),
+            };
+            query = if desc {
+                query.order_by(column, sea_orm::Order::Desc)
+            } else {
+                query.order_by(column, sea_orm::Order::Asc)
+            };
+        }
+    }
+
     let total = query.clone().count(db).await?;
     let offset = current.saturating_sub(1).saturating_mul(size);
     let items = query.limit(size).offset(offset).all(db).await?;
+    let creator_ids: HashSet<i64> = items.iter().filter_map(|inv| inv.creator_id).collect();
     let record: Vec<SysUserInvitationVo> = items
         .into_iter()
         .map(|inv| SysUserInvitationVo {
@@ -49,6 +75,7 @@ pub async fn do_list(
             update_time: inv
                 .update_time
                 .map(|t| t.and_utc().timestamp_millis() as f64),
+            creator_id: inv.creator_id,
             code: inv.code,
             username: inv.username,
             role_id: inv.role_id.map(|r| r as i64),
@@ -57,10 +84,12 @@ pub async fn do_list(
         })
         .collect();
 
+    let users = crate::functions::api::sys_user_map(db, &creator_ids).await?;
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "total": total,
         "record": record,
-    }))))
+    })))
+    .with_users(users))
 }
 
 /// Update or create an invitation by code (upsert semantics).
@@ -77,8 +106,8 @@ pub async fn do_update(
 
     let role = match role_id {
         0 => _utils::types::SystemUserRole::Admin,
-        1 => _utils::types::SystemUserRole::MapNeigui,
-        2 => _utils::types::SystemUserRole::MapManager,
+        1 => _utils::types::SystemUserRole::MapManager,
+        2 => _utils::types::SystemUserRole::MapNeigui,
         3 => _utils::types::SystemUserRole::MapPunctuate,
         4 => _utils::types::SystemUserRole::MapUser,
         5 => _utils::types::SystemUserRole::Visitor,

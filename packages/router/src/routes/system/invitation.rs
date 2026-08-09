@@ -8,7 +8,10 @@ use axum::{
 };
 
 use crate::middlewares::{ExtractAdmin, ExtractAuthInfo};
-use _utils::{models::wrapper::Pagination, types::AccessPolicyItemEnum};
+use _utils::{
+    models::wrapper::Pagination,
+    types::{AccessPolicyItemEnum, InvitationSort},
+};
 
 /// 获取用户邀请列表的请求参数
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -22,27 +25,6 @@ pub struct InvitationListRequest {
     pub sort: Option<Vec<InvitationSort>>,
     /// 用户名
     pub username: Option<String>,
-}
-
-/// 邀请排序枚举
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum InvitationSort {
-    #[serde(rename = "createTime+")]
-    CreateTime,
-    #[serde(rename = "createTime-")]
-    CreateTimeReverse,
-    #[serde(rename = "id+")]
-    Id,
-    #[serde(rename = "id-")]
-    IdReverse,
-    #[serde(rename = "updateTime+")]
-    UpdateTime,
-    #[serde(rename = "updateTime-")]
-    UpdateTimeReverse,
-    #[serde(rename = "username+")]
-    Username,
-    #[serde(rename = "username-")]
-    UsernameReverse,
 }
 
 /// 新增/更新用户邀请的请求参数
@@ -105,6 +87,7 @@ pub async fn list(
         auth,
         payload.code,
         payload.username,
+        payload.sort,
         size,
         current as u64,
     )

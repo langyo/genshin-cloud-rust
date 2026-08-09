@@ -8,6 +8,7 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{SysUserDeviceVo, wrapper::CommonResponse},
+    types::DeviceSort,
 };
 
 /// List user devices with optional filtering.
@@ -16,6 +17,7 @@ pub async fn do_list(
     user_id: Option<i64>,
     device_id: Option<String>,
     status: Option<i32>,
+    sort: Option<Vec<DeviceSort>>,
     size: u64,
     current: u64,
 ) -> Result<CommonResponse<serde_json::Value>> {
@@ -30,6 +32,32 @@ pub async fn do_list(
     }
     if let Some(s) = status {
         query = query.filter(device_model::Column::Status.eq(s));
+    }
+
+    // 排序：显式枚举映射，变体重命名会变成编译错误而非静默忽略排序键。
+    if let Some(sorts) = sort {
+        use sea_orm::QueryOrder;
+        for s in sorts {
+            let (column, desc) = match s {
+                DeviceSort::DeviceId => (device_model::Column::DeviceId, false),
+                DeviceSort::DeviceIdReverse => (device_model::Column::DeviceId, true),
+                DeviceSort::Id => (device_model::Column::Id, false),
+                DeviceSort::IdReverse => (device_model::Column::Id, true),
+                DeviceSort::Ipv4 => (device_model::Column::Ipv4, false),
+                DeviceSort::Ipv4Reverse => (device_model::Column::Ipv4, true),
+                DeviceSort::LastLoginTime => (device_model::Column::LastLoginTime, false),
+                DeviceSort::LastLoginTimeReverse => (device_model::Column::LastLoginTime, true),
+                DeviceSort::Status => (device_model::Column::Status, false),
+                DeviceSort::StatusReverse => (device_model::Column::Status, true),
+                DeviceSort::UpdateTime => (device_model::Column::UpdateTime, false),
+                DeviceSort::UpdateTimeReverse => (device_model::Column::UpdateTime, true),
+            };
+            query = if desc {
+                query.order_by(column, sea_orm::Order::Desc)
+            } else {
+                query.order_by(column, sea_orm::Order::Asc)
+            };
+        }
     }
 
     let total = query.clone().count(db).await?;

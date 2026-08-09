@@ -173,6 +173,8 @@ pub struct SysUserInvitationVo {
     pub create_time: f64,
     /// 更新时间
     pub update_time: Option<f64>,
+    /// 创建人 ID
+    pub creator_id: Option<i64>,
     /// 邀请码
     pub code: String,
     /// 用户名
