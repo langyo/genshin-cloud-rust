@@ -95,7 +95,7 @@ pub async fn do_list(
 /// Update or create an invitation by code (upsert semantics).
 /// `code` 为空时生成新邀请码并插入；`code` 有值时按 code 更新，查不到则插入。
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     code: Option<String>,
     username: String,
     role_id: i64,
@@ -126,6 +126,7 @@ pub async fn do_update(
             am.role_id = Set(Some(role));
             am.remark = Set(Some(remark));
             am.access_policy = Set(Some(access_policy));
+            am.updater_id = Set(Some(auth.info.id));
             inv_model::Entity::update_safety(am)?.exec(db).await?;
             return Ok(CommonResponse::new(Ok(())));
         }
@@ -136,7 +137,7 @@ pub async fn do_update(
             id: NotSet,
             create_time: Set(now),
             update_time: Set(None),
-            creator_id: Set(None),
+            creator_id: Set(Some(auth.info.id)),
             updater_id: Set(None),
             del_flag: Set(false),
             code: Set(c),
@@ -156,7 +157,7 @@ pub async fn do_update(
         id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
-        creator_id: Set(None),
+        creator_id: Set(Some(auth.info.id)),
         updater_id: Set(None),
         del_flag: Set(false),
         code: Set(code.to_string()),

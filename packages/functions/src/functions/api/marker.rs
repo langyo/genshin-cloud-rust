@@ -170,6 +170,16 @@ fn tweak_text_needle(tweak: &_utils::models::marker::MarkerTweakConfig) -> Optio
     None
 }
 
+/// 数值类 tweak 的整数值：Integer 直接取；Double 且为整数值（如 1.0）时取整。
+/// 前端可能发送 1.0 这类浮点字面量，仅匹配 Integer 会静默失效。
+fn tweak_int_value(value: &_utils::models::marker::TweakValue) -> Option<i64> {
+    match value {
+        _utils::models::marker::TweakValue::Integer(i) => Some(*i),
+        _utils::models::marker::TweakValue::Double(d) if d.fract() == 0.0 => Some(*d as i64),
+        _ => None,
+    }
+}
+
 /// 按 tweak 类型计算文本字段（title/content）的新值：
 /// - Update：条件编辑 —— meta.test 命中（origin 包含 test）时，将 test 的全部出现处
 ///   替换为 meta.replace（或 value），未命中返回 None（不修改）；test 缺失时按 Replace 整值替换
@@ -306,10 +316,10 @@ pub async fn do_tweak(
                         }
                     },
                     _utils::models::marker::MarkerTweakConfigPropEnum::RefreshTime => {
-                        if let Some(_v) = &tweak.meta.value
-                            && let _utils::models::marker::TweakValue::Integer(i) = _v
+                        if let Some(v) = &tweak.meta.value
+                            && let Some(i) = tweak_int_value(v)
                         {
-                            am.refresh_time = Set(*i);
+                            am.refresh_time = Set(i);
                         }
                     },
                     _utils::models::marker::MarkerTweakConfigPropEnum::Extra => {
@@ -324,11 +334,11 @@ pub async fn do_tweak(
                         }
                     },
                     _utils::models::marker::MarkerTweakConfigPropEnum::HiddenFlag => {
-                        if let Some(_val) = &tweak.meta.value
-                            && let _utils::models::marker::TweakValue::Integer(i) = _val
+                        if let Some(val) = &tweak.meta.value
+                            && let Some(i) = tweak_int_value(val)
                         {
                             // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
-                            let hf = match *i as i32 {
+                            let hf = match i as i32 {
                                 0 => _utils::types::HiddenFlag::Visible,
                                 1 => _utils::types::HiddenFlag::Hidden,
                                 2 => _utils::types::HiddenFlag::Spy,
@@ -586,6 +596,7 @@ pub async fn do_update_single(
     am.picture = Set(payload.picture);
     am.picture_creator_id = Set(payload.picture_creator_id);
     am.position = Set(payload.position);
+    am.hidden_flag = Set(payload.hidden_flag);
     if let Some(refresh_time) = payload.refresh_time {
         am.refresh_time = Set(refresh_time);
     }

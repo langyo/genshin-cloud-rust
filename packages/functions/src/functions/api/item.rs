@@ -56,7 +56,14 @@ pub(crate) fn item_to_vo(
     count_map: &std::collections::HashMap<i64, i64>,
 ) -> ItemVO {
     ItemVO {
+        version: it.version,
         id: it.id,
+        create_time: it.create_time.and_utc().timestamp_millis() as f64,
+        update_time: it
+            .update_time
+            .map(|dt| dt.and_utc().timestamp_millis() as f64),
+        creator_id: it.creator_id,
+        updater_id: it.updater_id,
         name: it.name.clone(),
         area_id: it.area_id,
         default_refresh_time: it.default_refresh_time,
@@ -67,7 +74,7 @@ pub(crate) fn item_to_vo(
         icon_style_type: it.icon_style_type,
         hidden_flag: it.hidden_flag,
         sort_index: it.sort_index,
-        special_flag: it.special_flag,
+        special_flag: it.special_flag.map(|v| v as i64),
         type_id_list: type_map.get(&it.id).cloned().unwrap_or_default(),
         count: count_map.get(&it.id).copied(),
         count_split: None,
@@ -126,14 +133,18 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
     am.name = Set(p.name.clone());
     am.area_id = Set(p.area_id);
     am.default_content = Set(p.default_content.clone());
-    am.default_count = Set(p.default_count as i32);
+    if let Some(count) = p.default_count {
+        am.default_count = Set(count as i32);
+    }
     am.default_refresh_time = Set(p.default_refresh_time.unwrap_or(0));
-    am.icon_style_type = Set(p.icon_style_type);
+    if let Some(style) = p.icon_style_type {
+        am.icon_style_type = Set(style);
+    }
     am.hidden_flag = Set(p.hidden_flag);
     if let Some(si) = p.sort_index {
         am.sort_index = Set(si as i32);
     }
-    am.special_flag = Set(Some(p.special_flag as i32));
+    am.special_flag = Set(p.special_flag.map(|v| v as i32));
 
     item_model::Entity::update_safety(am)?.exec(db).await?;
 
@@ -426,7 +437,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
         icon_style_type: Set(payload.icon_style_type),
         hidden_flag: Set(payload.hidden_flag),
         sort_index: Set(payload.sort_index.unwrap_or(0) as i32),
-        special_flag: Set(Some(payload.special_flag as i32)),
+        special_flag: Set(payload.special_flag.map(|v| v as i32)),
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;

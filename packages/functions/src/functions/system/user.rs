@@ -89,12 +89,30 @@ pub async fn do_register_qq(
     Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
-pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
+pub async fn do_get_info(auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await?;
     let m = m.ok_or(anyhow!("User not found"))?;
+
+    // 权限校验：本人可读全部字段；非本人需 MapManager 及以上（role_id <= MapManager，
+    // Admin=0 / MapManager=1），否则只返回公开字段，不下发 qq/phone/accessPolicy。
+    let is_self = auth.info.id == user_id;
+    let is_manager = (auth.info.role_id as i32) <= (SystemUserRole::MapManager as i32);
+    if !is_self && !is_manager {
+        return Ok(SysUserVO {
+            id: m.id,
+            username: m.username,
+            nickname: m.nickname,
+            qq: None,
+            phone: None,
+            logo: m.logo,
+            role_id: m.role_id,
+            access_policy: Default::default(),
+            remark: m.remark,
+        });
+    }
     Ok(m.into())
 }
 
@@ -152,12 +170,19 @@ pub async fn do_update(
 }
 
 pub async fn do_update_password(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     user_id: i64,
     old_password: String,
     new_password: String,
 ) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
+    // 权限校验：仅本人可凭旧密码改密；Admin 例外可改任意用户
+    let is_admin = auth.info.role_id == SystemUserRole::Admin;
+    if !is_admin && auth.info.id != user_id {
+        return Err(anyhow!(
+            "Forbidden: only the account owner can update password"
+        ));
+    }
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await?;

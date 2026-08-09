@@ -22,6 +22,32 @@ use _utils::{
     },
 };
 
+/// 重算某类型的 `is_final`：无未删除子级 → true（末端），有子级 → false。
+/// 仅在实际值变化时写库。type_id <= 0（根占位）直接跳过。
+async fn refresh_is_final(db: &sea_orm::DatabaseConnection, type_id: i64) -> Result<()> {
+    if type_id <= 0 {
+        return Ok(());
+    }
+    if let Some(parent) = item_type_model::Entity::find_safety_by_id(type_id)
+        .one(db)
+        .await?
+    {
+        let remain = item_type_model::Entity::find_safety()
+            .filter(item_type_model::Column::ParentId.eq(parent.id))
+            .count(db)
+            .await?;
+        let is_final = remain == 0;
+        if parent.is_final != is_final {
+            let mut pam: item_type_model::ActiveModel = parent.into();
+            pam.is_final = Set(is_final);
+            item_type_model::Entity::update_safety(pam)?
+                .exec(db)
+                .await?;
+        }
+    }
+    Ok(())
+}
+
 // 更新类型
 pub async fn do_update(
     auth: AuthInfo,
@@ -80,15 +106,25 @@ pub async fn do_move_to_target(
     {
         return Err(anyhow!("ItemType not found: {target_type_id}"));
     }
+    // 被移动类型的原父级（移动后需重算 is_final）
+    let mut old_parents: Vec<i64> = Vec::new();
     for type_id in payload {
         // 把 typeId 移动到新父级：更新 parent_id（不再改写 link 表的 type_id）
         let item = item_type_model::Entity::find_safety_by_id(type_id)
             .one(db)
             .await?
             .ok_or_else(|| anyhow!("ItemType not found: {type_id}"))?;
-        let mut am: item_type_model::ActiveModel = item.into();
-        am.parent_id = Set(target_type_id);
-        item_type_model::Entity::update_safety(am)?.exec(db).await?;
+        if item.parent_id != target_type_id {
+            old_parents.push(item.parent_id);
+            let mut am: item_type_model::ActiveModel = item.into();
+            am.parent_id = Set(target_type_id);
+            item_type_model::Entity::update_safety(am)?.exec(db).await?;
+        }
+    }
+    // is_final 重算：目标父级已有子级 → false；原父级无子级 → true
+    refresh_is_final(db, target_type_id).await?;
+    for p in old_parents {
+        refresh_is_final(db, p).await?;
     }
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
@@ -222,22 +258,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
         .await?;
 
     // is_final 重算：被删类型的父级若再无子级，恢复为末端类型
-    if let Some(parent) = item_type_model::Entity::find_safety_by_id(root_parent_id)
-        .one(db)
-        .await?
-    {
-        let remain = item_type_model::Entity::find_safety()
-            .filter(item_type_model::Column::ParentId.eq(parent.id))
-            .count(db)
-            .await?;
-        if remain == 0 {
-            let mut pam: item_type_model::ActiveModel = parent.into();
-            pam.is_final = Set(true);
-            item_type_model::Entity::update_safety(pam)?
-                .exec(db)
-                .await?;
-        }
-    }
+    refresh_is_final(db, root_parent_id).await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -252,6 +273,10 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
 
     let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
 
+    // 前端不传 isFinal（serde(default) 为 false）时：
+    // 有父级（parent_id > 0）→ 叶子类型 is_final=true；无父级 → false
+    let is_final = payload.is_final || payload.parent_id > 0;
+
     let active = item_type_model::ActiveModel {
         version: Set(0),
         id: NotSet,
@@ -265,12 +290,14 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
         name: Set(name),
         content: Set(payload.content),
         parent_id: Set(payload.parent_id),
-        is_final: Set(payload.is_final),
+        is_final: Set(is_final),
         hidden_flag: Set(payload.hidden_flag),
         sort_index: Set(sort_index),
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    // 父级新增子级后不再是末端类型
+    refresh_is_final(&DB_CONN.wait().pg_conn, payload.parent_id).await?;
     Ok(CommonResponse::new(Ok(res.id)))
 }
 

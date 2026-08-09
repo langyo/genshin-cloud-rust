@@ -72,8 +72,9 @@ pub struct ItemAddRequest {
     /// 排序
     pub sort_index: Option<i64>,
     /// 特殊物品标记，二进制表示；低位第一位：是否为显示物品
+    /// 存量数据可能为 null，缺失或 null 均接受
     #[serde(default)]
-    pub special_flag: i64,
+    pub special_flag: Option<i64>,
     /// 物品类型 ID 列表
     #[serde(default)]
     pub type_id_list: Vec<i64>,
@@ -90,16 +91,18 @@ pub struct ItemUpdateData {
     #[serde(default)]
     pub default_content: Option<String>,
     /// 默认点位计数
+    /// 存量数据可能为 null，缺失或 null 均接受
     #[serde(default)]
-    pub default_count: i64,
+    pub default_count: Option<i64>,
     /// 默认刷新时间
     pub default_refresh_time: Option<i64>,
     /// 权限屏蔽标记
     #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 物品显示类型
+    /// 存量数据可能为 null，缺失或 null 均接受
     #[serde(default)]
-    pub icon_style_type: IconStyleType,
+    pub icon_style_type: Option<IconStyleType>,
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
@@ -113,8 +116,9 @@ pub struct ItemUpdateData {
     /// 排序
     pub sort_index: Option<i64>,
     /// 特殊物品标记，二进制表示；低位第一位：是否为显示物品
+    /// 存量数据可能为 null，缺失或 null 均接受
     #[serde(default)]
-    pub special_flag: i64,
+    pub special_flag: Option<i64>,
     /// 物品类型 ID 列表
     #[serde(default)]
     pub type_id_list: Vec<i64>,
@@ -181,7 +185,12 @@ pub struct ItemListRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemVO {
+    pub version: i64,
     pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
     pub name: String,
     pub area_id: i64,
     pub default_refresh_time: i64,
@@ -193,7 +202,7 @@ pub struct ItemVO {
     pub icon_style_type: crate::types::IconStyleType,
     pub hidden_flag: crate::types::HiddenFlag,
     pub sort_index: i32,
-    pub special_flag: Option<i32>,
+    pub special_flag: Option<i64>,
     /// 所属物品类型（`item_type_link`），Java `ItemVo.typeIdList`
     /// 前端按类型过滤/分组物品，缺失会导致筛选面板恒空。
     #[serde(default)]

@@ -249,8 +249,10 @@ pub enum TweakValue {
     AnythingArray(Vec<Option<serde_json::Value>>),
     AnythingMap(HashMap<String, Option<serde_json::Value>>),
     Bool(bool),
-    Double(f64),
+    // Integer 须在 Double 前：untagged 下 JSON 数字先按 i64 解析，
+    // 否则前端发送的整数值（refreshTime/hiddenFlag）全被解析为 Double 而静默失效
     Integer(i64),
+    Double(f64),
     String(String),
 }
 
