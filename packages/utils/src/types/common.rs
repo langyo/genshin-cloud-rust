@@ -43,12 +43,13 @@ impl<'de> Deserialize<'de> for HiddenFlag {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, EnumIter, DeriveActiveEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 /// 权限可见层级
 pub enum HiddenFlag {
     /// 可见
     #[sea_orm(num_value = 0)]
+    #[default]
     Visible = 0,
     /// 隐藏
     #[sea_orm(num_value = 1)]
@@ -59,12 +60,6 @@ pub enum HiddenFlag {
     /// 彩蛋
     #[sea_orm(num_value = 3)]
     Suprise = 3,
-}
-
-impl Default for HiddenFlag {
-    fn default() -> Self {
-        HiddenFlag::Visible
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum)]
