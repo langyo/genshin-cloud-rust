@@ -19,7 +19,10 @@ use _utils::{
     jwt::AuthInfo,
     models::{
         marker::MarkerFilterRequest,
-        marker::{MarkerAddRequest, MarkerItemLinkVo, MarkerTweakRequest, MarkerUpdateData},
+        marker::{
+            MarkerAddRequest, MarkerItemLinkVo, MarkerTweakConfigPropEnum, MarkerTweakRequest,
+            MarkerUpdateData,
+        },
         marker::{MarkerEmptyResponse, MarkerListResponse, MarkerVO},
         wrapper::{CommonResponse, Pagination},
     },
@@ -299,68 +302,101 @@ pub async fn do_tweak(
             let marker_title = m.marker_title.clone();
             let mut am: marker_model::ActiveModel = m.into();
 
+            // 同一字段的多条 tweak 按顺序链式应用（前一条结果作为下一条的 origin）：
+            // 先按字段分组，组内依次 apply（结果传递），避免每条都基于原值导致中间结果丢失。
+            let mut groups: Vec<(
+                MarkerTweakConfigPropEnum,
+                Vec<&_utils::models::marker::MarkerTweakConfig>,
+            )> = Vec::new();
             for tweak in payload.tweaks.iter() {
-                match tweak.prop {
-                    _utils::models::marker::MarkerTweakConfigPropEnum::Content => {
-                        if let Some(new_content) = apply_text_tweak(tweak, content.clone()) {
-                            am.content = Set(Some(new_content));
+                match groups.iter_mut().find(|(prop, _)| *prop == tweak.prop) {
+                    Some((_, list)) => list.push(tweak),
+                    None => groups.push((tweak.prop, vec![tweak])),
+                }
+            }
+
+            for (prop, tweaks) in groups {
+                match prop {
+                    MarkerTweakConfigPropEnum::Content => {
+                        let mut cur = content.clone();
+                        for tweak in tweaks {
+                            if let Some(next) = apply_text_tweak(tweak, cur.clone()) {
+                                cur = Some(next.clone());
+                                am.content = Set(Some(next));
+                            }
                         }
                     },
-                    _utils::models::marker::MarkerTweakConfigPropEnum::Title => {
-                        if let Some(new_title) = apply_text_tweak(tweak, marker_title.clone()) {
-                            am.marker_title = Set(Some(new_title));
+                    MarkerTweakConfigPropEnum::Title => {
+                        let mut cur = marker_title.clone();
+                        for tweak in tweaks {
+                            if let Some(next) = apply_text_tweak(tweak, cur.clone()) {
+                                cur = Some(next.clone());
+                                am.marker_title = Set(Some(next));
+                            }
                         }
                     },
-                    _utils::models::marker::MarkerTweakConfigPropEnum::Position => {
-                        if let Some(v) = &tweak.meta.replace {
-                            am.position = Set(v.clone());
-                        } else if let Some(_utils::models::marker::TweakValue::String(s)) =
-                            &tweak.meta.value
-                        {
-                            // 前端拖拽移动发 meta.value（"x,y" 字符串，与 replace 同语义）
-                            am.position = Set(s.clone());
+                    MarkerTweakConfigPropEnum::Position => {
+                        for tweak in tweaks {
+                            if let Some(v) = &tweak.meta.replace {
+                                am.position = Set(v.clone());
+                            } else if let Some(_utils::models::marker::TweakValue::String(s)) =
+                                &tweak.meta.value
+                            {
+                                // 前端拖拽移动发 meta.value（"x,y" 字符串，与 replace 同语义）
+                                am.position = Set(s.clone());
+                            }
                         }
                     },
-                    _utils::models::marker::MarkerTweakConfigPropEnum::VideoPath => {
-                        if let Some(v) = &tweak.meta.replace {
-                            am.video_path = Set(Some(v.clone()));
+                    MarkerTweakConfigPropEnum::VideoPath => {
+                        for tweak in tweaks {
+                            if let Some(v) = &tweak.meta.replace {
+                                am.video_path = Set(Some(v.clone()));
+                            }
                         }
                     },
-                    _utils::models::marker::MarkerTweakConfigPropEnum::RefreshTime => {
-                        if let Some(v) = &tweak.meta.value
-                            && let Some(i) = tweak_int_value(v)
-                        {
-                            am.refresh_time = Set(i);
+                    MarkerTweakConfigPropEnum::RefreshTime => {
+                        for tweak in tweaks {
+                            if let Some(v) = &tweak.meta.value
+                                && let Some(i) = tweak_int_value(v)
+                            {
+                                am.refresh_time = Set(i);
+                            }
                         }
                     },
-                    _utils::models::marker::MarkerTweakConfigPropEnum::Extra => {
-                        if let Some(map) = &tweak.meta.map {
-                            // 用序列化后的 map 完整替换 extra
-                            am.extra = Set(Some(serde_json::to_value(map)?));
-                        } else if let Some(_utils::models::marker::TweakValue::AnythingMap(m)) =
-                            &tweak.meta.value
-                        {
-                            // 尝试设置任意 JSON 值
-                            am.extra = Set(Some(serde_json::to_value(m)?));
+                    MarkerTweakConfigPropEnum::Extra => {
+                        for tweak in tweaks {
+                            if let Some(map) = &tweak.meta.map {
+                                // 用序列化后的 map 完整替换 extra
+                                am.extra = Set(Some(serde_json::to_value(map)?));
+                            } else if let Some(_utils::models::marker::TweakValue::AnythingMap(m)) =
+                                &tweak.meta.value
+                            {
+                                // 尝试设置任意 JSON 值
+                                am.extra = Set(Some(serde_json::to_value(m)?));
+                            }
                         }
                     },
-                    _utils::models::marker::MarkerTweakConfigPropEnum::HiddenFlag => {
-                        if let Some(val) = &tweak.meta.value
-                            && let Some(i) = tweak_int_value(val)
-                        {
-                            // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
-                            let hf = match i as i32 {
-                                0 => _utils::types::HiddenFlag::Visible,
-                                1 => _utils::types::HiddenFlag::Hidden,
-                                2 => _utils::types::HiddenFlag::Spy,
-                                3 => _utils::types::HiddenFlag::Suprise,
-                                _ => _utils::types::HiddenFlag::Visible,
-                            };
-                            am.hidden_flag = Set(hf);
+                    MarkerTweakConfigPropEnum::HiddenFlag => {
+                        for tweak in tweaks {
+                            if let Some(val) = &tweak.meta.value
+                                && let Some(i) = tweak_int_value(val)
+                            {
+                                // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
+                                let hf = match i as i32 {
+                                    0 => _utils::types::HiddenFlag::Visible,
+                                    1 => _utils::types::HiddenFlag::Hidden,
+                                    2 => _utils::types::HiddenFlag::Spy,
+                                    3 => _utils::types::HiddenFlag::Suprise,
+                                    _ => _utils::types::HiddenFlag::Visible,
+                                };
+                                am.hidden_flag = Set(hf);
+                            }
                         }
                     },
-                    _utils::models::marker::MarkerTweakConfigPropEnum::ItemList => {
-                        tweak_item_list(db, *marker_id, tweak).await?;
+                    MarkerTweakConfigPropEnum::ItemList => {
+                        for tweak in tweaks {
+                            tweak_item_list(db, *marker_id, tweak).await?;
+                        }
                     },
                 }
             }
@@ -375,6 +411,7 @@ pub async fn do_tweak(
     if touched_ids.is_empty() {
         return Ok(CommonResponse::new(Ok(vec![])));
     }
+    super::binary_doc::invalidate_doc_cache().await;
     let item_map = marker_item_map(db, &touched_ids).await?;
     let mut arr = Vec::new();
     for chunk in touched_ids.chunks(1000) {
@@ -579,6 +616,7 @@ pub async fn do_add_single(
     for (item_id, count) in parse_item_entries(&payload.item_list) {
         insert_item_link(db, res.id, item_id, count).await?;
     }
+    super::binary_doc::invalidate_doc_cache().await;
     // 直接返回裸 id，前端期望 data 为 number
     Ok(CommonResponse::new(Ok(res.id)))
 }
@@ -632,6 +670,7 @@ pub async fn do_update_single(
         insert_item_link(db, payload.id, item_id, count).await?;
     }
 
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }
 
@@ -875,5 +914,6 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<MarkerE
             .await?;
     }
 
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }

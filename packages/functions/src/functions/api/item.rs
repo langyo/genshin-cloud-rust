@@ -210,15 +210,15 @@ pub async fn do_get_list(
         }
     }
     if let Some(type_list) = payload.type_id_list {
-        // 与 link 表联表以按类型进行筛选
+        // 与 link 表联表以按类型进行筛选。
+        // typeIdList 有值时恒执行过滤：空命中集也必须过滤（返回空页），
+        // 否则 `!item_ids.is_empty()` 守卫会丢弃过滤条件而返回全量数据。
         let ids = link_model::Entity::find_safety()
             .filter(link_model::Column::TypeId.is_in(type_list))
             .all(db)
             .await?;
         let item_ids: Vec<i64> = ids.into_iter().map(|l| l.item_id).collect();
-        if !item_ids.is_empty() {
-            query = query.filter(item_model::Column::Id.is_in(item_ids));
-        }
+        query = query.filter(item_model::Column::Id.is_in(item_ids));
     }
 
     // sortIndex 排序（前端恒传 "sortIndex-"；取首个排序条件）

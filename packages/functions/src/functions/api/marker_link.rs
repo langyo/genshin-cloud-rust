@@ -91,6 +91,7 @@ pub async fn do_link(
         };
         active.insert(db).await?;
     }
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(group_id)))
 }
 
@@ -195,6 +196,7 @@ pub async fn do_delete(
             }
         }
     }
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "groups": groups,
         "markers": markers

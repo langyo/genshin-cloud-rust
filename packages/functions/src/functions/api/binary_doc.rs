@@ -227,6 +227,14 @@ pub async fn invalidate_item_doc_cache() {
     invalidate_all().await;
 }
 
+/// Invalidate the binary-doc caches for any domain (in-process moka + Redis
+/// across replicas). Marker / marker_link / item writes all change what the
+/// `*_doc` pages serve, so call this after any such write; otherwise other
+/// clients keep seeing stale pages until the TTL expires.
+pub async fn invalidate_doc_cache() {
+    invalidate_all().await;
+}
+
 /// Result-level cache entry: one page's md5 metadata plus its compressed
 /// bytes, so both the md5-list and the bin-fetch endpoints can be served
 /// without any database scan on a warm hit.
