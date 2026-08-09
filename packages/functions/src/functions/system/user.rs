@@ -59,7 +59,9 @@ pub async fn do_register_qq(
     remark: Option<String>,
     username: String,
     password: String,
-    qq: Option<String>,
+    // 公开接口不信任客户端自报的 qq 绑定：真实场景应由 QQ OAuth 回调传入
+    // openid 并落库，此处仅做必填校验（缺省则 serde 反序列化直接失败）。
+    qq: String,
 ) -> Result<CommonResponse<i64>> {
     let db = &DB_CONN.wait().pg_conn;
 
@@ -76,7 +78,7 @@ pub async fn do_register_qq(
         username: Set(username),
         password: Set(_utils::bcrypt::generate_storage_password(&password)?),
         nickname: Set(None),
-        qq: Set(qq),
+        qq: Set(Some(qq)),
         phone: Set(None),
         logo: Set(logo),
         // 公开接口：不信任客户端传入的角色，固定注册为地图用户
@@ -141,7 +143,11 @@ pub async fn do_update(
     let mut am: sys_user_model::ActiveModel = m.into();
 
     if let Some(ap) = access_policy {
-        am.access_policy = Set(Some(_utils::types::AccessPolicyList(ap)));
+        // access_policy 是风控/运营管控字段：仅 Admin 可修改。非 Admin（含本人
+        // 整包提交 InfoEditor）一律忽略该字段，防止普通用户自行解除风控封锁。
+        if is_admin {
+            am.access_policy = Set(Some(_utils::types::AccessPolicyList(ap)));
+        }
     }
     if let Some(l) = logo {
         am.logo = Set(Some(l));

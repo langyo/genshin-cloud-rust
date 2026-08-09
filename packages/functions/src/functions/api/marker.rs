@@ -837,5 +837,32 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<MarkerE
     let mut am: marker_model::ActiveModel = m.into();
     am.del_flag = Set(true);
     marker_model::Entity::delete_safety(am)?.exec(db).await?;
+
+    // 级联软删该 marker 的 item 关联
+    let item_links = mil_model::Entity::find_safety()
+        .filter(mil_model::Column::MarkerId.eq(id))
+        .all(db)
+        .await?;
+    for link in item_links {
+        mil_model::Entity::delete_safety(link.into())?
+            .exec(db)
+            .await?;
+    }
+
+    // 级联软删该 marker 参与的连线（from_id 或 to_id 命中）
+    let linkages = linkage_model::Entity::find_safety()
+        .filter(
+            sea_orm::Condition::any()
+                .add(linkage_model::Column::FromId.eq(id))
+                .add(linkage_model::Column::ToId.eq(id)),
+        )
+        .all(db)
+        .await?;
+    for linkage in linkages {
+        linkage_model::Entity::delete_safety(linkage.into())?
+            .exec(db)
+            .await?;
+    }
+
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }

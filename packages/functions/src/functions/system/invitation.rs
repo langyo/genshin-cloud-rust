@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    QueryFilter, QuerySelect,
+    QueryFilter, QuerySelect, TransactionTrait,
     prelude::*,
 };
 
@@ -150,7 +150,8 @@ pub async fn do_update(
         return Ok(CommonResponse::new(Ok(())));
     }
 
-    let code = &uuid::Uuid::new_v4().simple().to_string()[..8];
+    // 邀请码：uuid 前 12 位 hex（48 bit 熵，显著高于原 8 位，降低撞码/爆破风险）
+    let code = &uuid::Uuid::new_v4().simple().to_string()[..12];
     let now = Utc::now().naive_utc();
     let am = inv_model::ActiveModel {
         version: Set(0),
@@ -193,11 +194,6 @@ pub async fn do_consume(
     nickname: Option<String>,
 ) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
-    let inv = inv_model::Entity::find_safety()
-        .filter(inv_model::Column::Code.eq(&code))
-        .one(db)
-        .await?
-        .ok_or_else(|| anyhow!("Invitation code not found"))?;
 
     let now = Utc::now().naive_utc();
     let username = username
@@ -208,12 +204,45 @@ pub async fn do_consume(
         .filter(|p| !p.is_empty())
         .unwrap_or_else(|| format!("{}_{}", code, now.and_utc().timestamp()));
 
-    // 用户已存在：不重复创建，返回 EXISTING 供前端直接走登录
+    // 事务内完成「查邀请 → 抢占消费 → 建用户」，防并发重复消费
+    let txn = db.begin().await?;
+
+    let inv = inv_model::Entity::find_safety()
+        .filter(inv_model::Column::Code.eq(&code))
+        .one(&txn)
+        .await?
+        .ok_or_else(|| anyhow!("Invitation code not found"))?;
+
+    // 条件软删抢占邀请码：并发消费时，后到的事务会等锁并在拿到行锁后重新
+    // 评估 WHERE（del_flag=false 已不再满足）→ 影响行数为 0，说明已被消费，
+    // 回滚并报错，杜绝同一邀请码被重复使用。
+    let claimed = inv_model::Entity::update_many()
+        .col_expr(
+            inv_model::Column::DelFlag,
+            sea_orm::sea_query::Expr::value(true),
+        )
+        .col_expr(
+            inv_model::Column::UpdateTime,
+            sea_orm::sea_query::Expr::value(now),
+        )
+        .filter(inv_model::Column::Id.eq(inv.id))
+        .filter(inv_model::Column::DelFlag.eq(false))
+        .exec(&txn)
+        .await?
+        .rows_affected;
+    if claimed == 0 {
+        txn.rollback().await?;
+        return Err(anyhow!("Invitation code already consumed"));
+    }
+
+    // 用户已存在：不重复创建，返回 EXISTING 供前端直接走登录（回滚抢占，
+    // 保留邀请码不被消耗）
     if let Some(user) = sys_user_model::Entity::find_safety()
         .filter(sys_user_model::Column::Username.eq(&username))
-        .one(db)
+        .one(&txn)
         .await?
     {
+        txn.rollback().await?;
         return Ok(CommonResponse::new(Ok(serde_json::json!({
             "userId": user.id,
             "result": "EXISTING",
@@ -242,11 +271,10 @@ pub async fn do_consume(
             .and_then(|v| serde_json::from_value::<AccessPolicyList>(v.clone()).ok())),
         remark: Set(None),
     };
-    let res = sys_user_model::Entity::insert(user_am).exec(db).await?;
+    let res = sys_user_model::Entity::insert(user_am).exec(&txn).await?;
 
-    inv_model::Entity::delete_safety(inv.into())?
-        .exec(db)
-        .await?;
+    // 提交事务：用户落库 + 邀请码软删一起生效；任一步失败则整体回滚
+    txn.commit().await?;
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "userId": res.last_insert_id,
         "result": "SUCCESS",

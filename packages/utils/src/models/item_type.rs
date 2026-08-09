@@ -6,7 +6,12 @@ use crate::{models::wrapper::Pagination, types::HiddenFlag};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeVO {
+    pub version: i64,
     pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
     pub name: String,
     pub icon_tag: Option<String>,
     /// 图标 ID（远程 schema 列）
@@ -58,6 +63,7 @@ pub struct ItemTypeAddRequest {
     /// 类型补充说明
     pub content: Option<String>,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 图标标签
     #[serde(default)]

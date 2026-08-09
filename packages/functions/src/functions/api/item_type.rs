@@ -173,7 +173,14 @@ pub async fn do_get_list(
     let items_val: Vec<ItemTypeVO> = items
         .into_iter()
         .map(|i| ItemTypeVO {
+            version: i.version,
             id: i.id,
+            create_time: i.create_time.and_utc().timestamp_millis() as f64,
+            update_time: i
+                .update_time
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
+            creator_id: i.creator_id,
+            updater_id: i.updater_id,
             name: i.name,
             icon_tag: Some(icon_tag_map.get(&i.icon_id).cloned().unwrap_or_default()),
             icon_id: i.icon_id,
@@ -199,7 +206,14 @@ pub async fn do_get_list_all(_auth: AuthInfo) -> Result<CommonResponse<ItemTypeA
     let vec = items
         .into_iter()
         .map(|i| ItemTypeVO {
+            version: i.version,
             id: i.id,
+            create_time: i.create_time.and_utc().timestamp_millis() as f64,
+            update_time: i
+                .update_time
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
+            creator_id: i.creator_id,
+            updater_id: i.updater_id,
             name: i.name,
             icon_tag: Some(icon_tag_map.get(&i.icon_id).cloned().unwrap_or_default()),
             icon_id: i.icon_id,

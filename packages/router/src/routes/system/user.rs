@@ -41,8 +41,8 @@ pub struct UserRegisterQQParams {
     pub username: String,
     /// 初始密码
     pub password: String,
-    /// QQ openid（QQ 授权后绑定；页面注册流程无此字段）
-    pub qq: Option<String>,
+    /// QQ openid（必填；公开接口不信任客户端自报，应由 QQ OAuth 回调传入）
+    pub qq: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
