@@ -909,9 +909,7 @@ async fn area_and_item_doc_business_assertions() {
     .expect("get score data ok");
     let samples = data.as_array().expect("samples array");
     assert_eq!(samples.len(), 1, "one sample returned");
-    let chars = samples[0]["data"]["chars"]
-        .as_object()
-        .expect("chars map");
+    let chars = samples[0]["data"]["chars"].as_object().expect("chars map");
     assert_eq!(
         chars.get("content").and_then(|v| v.as_f64()).unwrap_or(0.0),
         4.0,
@@ -1006,7 +1004,14 @@ async fn area_and_item_doc_business_assertions() {
     //    camelCase field naming (frontend parses the decompressed JSON by the
     //    Java `ItemVo`/`MarkerVo`/`IconVo` names) ───────────────────────────
     // item_doc page: decompress and check camelCase keys.
-    let item_bin = item_doc::do_list_page_bin(auth.clone(), md5_resp[0].md5.clone())
+    // Re-fetch the md5 list: the write operations above invalidated the doc cache.
+    let fresh_md5 = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
+        .await
+        .expect("item_doc md5 refresh")
+        .data
+        .expect("item_doc md5 payload");
+    assert!(!fresh_md5.is_empty(), "fresh item pages exist");
+    let item_bin = item_doc::do_list_page_bin(auth.clone(), fresh_md5[0].md5.clone())
         .await
         .expect("fetch item page bin");
     let mut decoder = flate2::read::GzDecoder::new(item_bin.as_slice());
@@ -1118,4 +1123,3 @@ async fn area_and_item_doc_business_assertions() {
         "item carries its typeIdList (Java ItemVo)"
     );
 }
-
