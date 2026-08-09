@@ -17,6 +17,13 @@ use _utils::{
 };
 
 // 业务处理函数
+/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 pub async fn do_register(
     _auth: AuthInfo,
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
@@ -304,7 +311,7 @@ pub async fn do_list(
     if let Some(nickname) = nickname
         && !nickname.is_empty()
     {
-        query = query.filter(sys_user_model::Column::Nickname.like(nickname));
+        query = query.filter(sys_user_model::Column::Nickname.like(escape_like(&nickname)));
     }
     if let Some(username) = username
         && !username.is_empty()

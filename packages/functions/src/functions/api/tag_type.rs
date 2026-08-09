@@ -21,6 +21,13 @@ use _utils::{
     },
 };
 
+/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// 新增标签类型
 pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
@@ -78,7 +85,8 @@ pub async fn do_list(
     let mut query = tag_type_model::Entity::find_safety();
 
     if let Some(name) = payload.name {
-        query = query.filter(tag_type_model::Column::Name.like(format!("%{}%", name)));
+        query =
+            query.filter(tag_type_model::Column::Name.like(format!("%{}%", escape_like(&name))));
     }
     if let Some(parent_id) = payload.parent_id {
         query = query.filter(tag_type_model::Column::ParentId.eq(parent_id));

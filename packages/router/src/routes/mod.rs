@@ -12,6 +12,41 @@ use axum::{
     routing::{get, post},
 };
 
+/// 将 handler 返回的错误映射为 500 响应：
+/// - 业务错误（如 "Item not found"，由 `anyhow!("...")` 产生）保留原文返回给客户端；
+/// - SQL/DB/Redis/MinIO/IO 等内部错误只记日志，向客户端返回通用消息，避免泄露内部细节。
+pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> (StatusCode, String) {
+    let err: anyhow::Error = e.into();
+    let detail = format!("{err}");
+    let chain = err
+        .chain()
+        .map(|c| c.to_string())
+        .collect::<Vec<_>>()
+        .join(" | ")
+        .to_lowercase();
+    const INTERNAL_KEYWORDS: [&str; 10] = [
+        "db",
+        "sql",
+        "connection",
+        "connect",
+        "database",
+        "redis",
+        "minio",
+        "s3",
+        "bucket",
+        "os error",
+    ];
+    if INTERNAL_KEYWORDS.iter().any(|kw| chain.contains(kw)) {
+        tracing::error!("internal server error: {detail}");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".into(),
+        )
+    } else {
+        (StatusCode::INTERNAL_SERVER_ERROR, detail)
+    }
+}
+
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
         .route("/oauth/token", post(system::oauth::oauth))

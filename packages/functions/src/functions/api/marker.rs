@@ -382,7 +382,7 @@ pub async fn do_tweak(
                                 && let Some(i) = tweak_int_value(val)
                             {
                                 // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
-                                let hf = match i as i32 {
+                                let hf = match i.clamp(i32::MIN as i64, i32::MAX as i64) as i32 {
                                     0 => _utils::types::HiddenFlag::Visible,
                                     1 => _utils::types::HiddenFlag::Hidden,
                                     2 => _utils::types::HiddenFlag::Spy,
@@ -442,7 +442,11 @@ fn parse_item_entries(item_list: &[Option<serde_json::Value>]) -> Vec<(i64, i32)
                     .or_else(|| obj.get("itemId"))
                     .and_then(|x| x.as_i64())
                 {
-                    let count = obj.get("count").and_then(|x| x.as_i64()).unwrap_or(1) as i32;
+                    let count =
+                        obj.get("count")
+                            .and_then(|x| x.as_i64())
+                            .unwrap_or(1)
+                            .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
                     ret.push((id, count));
                 }
             },
@@ -598,7 +602,7 @@ pub async fn do_add_single(
         position: Set(payload.position),
         content: Set(payload.content.or(Some(String::new()))),
         picture: Set(payload.picture),
-        marker_creator_id: Set(payload.marker_creator_id),
+        marker_creator_id: Set(auth.info.id),
         picture_creator_id: Set(payload.picture_creator_id),
         video_path: Set(payload.video_path),
         refresh_time: Set(payload.refresh_time.unwrap_or(0)),
@@ -638,7 +642,6 @@ pub async fn do_update_single(
     if let Some(extra) = payload.extra {
         am.extra = Set(Some(serde_json::to_value(extra)?));
     }
-    am.marker_creator_id = Set(payload.marker_creator_id);
     am.marker_title = Set(Some(payload.marker_title));
     am.picture = Set(payload.picture);
     am.picture_creator_id = Set(payload.picture_creator_id);

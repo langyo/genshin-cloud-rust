@@ -21,6 +21,12 @@ use _utils::{
     },
 };
 
+/// 基础设施错误（数据库 / Redis 等）不回传实现细节，统一为通用文案，
+/// 避免向客户端暴露 SQL / 连接等内部信息。
+fn internal_error(_err: impl std::fmt::Display) -> anyhow::Error {
+    anyhow!("Internal server error")
+}
+
 /// 按用户的 access_policy 校验登录环境（IP / 设备）。
 ///
 /// 数据源为 `sys_user_device` 表：
@@ -45,7 +51,8 @@ async fn check_access_policy(
         .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
         .order_by_desc(models::system::sys_user_device::Column::LastLoginTime)
         .one(db)
-        .await?;
+        .await
+        .map_err(internal_error)?;
 
     for policy in access_policy {
         match policy {
@@ -77,7 +84,8 @@ async fn check_access_policy(
                         models::system::sys_user_device::Column::Ipv4.eq(Some(ip.ip().to_string())),
                     )
                     .one(db)
-                    .await?;
+                    .await
+                    .map_err(internal_error)?;
                 if blocked.is_some() {
                     return Err(anyhow!("Access denied: IP {} is blocked", ip));
                 }
@@ -88,7 +96,8 @@ async fn check_access_policy(
                     .filter(models::system::sys_user_device::Column::Status.ne(0))
                     .filter(models::system::sys_user_device::Column::DeviceId.eq(user_agent))
                     .one(db)
-                    .await?;
+                    .await
+                    .map_err(internal_error)?;
                 if blocked.is_some() {
                     return Err(anyhow!("Access denied: device is blocked"));
                 }
@@ -111,32 +120,51 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
 
     let now = chrono::Utc::now().naive_utc();
     if let Some(dev) = existing {
+        // 已有登记：仅刷新 IP / 最近登录时间。status（封禁状态）随
+        // `dev.into()` 原样保留，不因成功登录被静默重置为 0。
         let mut am: models::system::sys_user_device::ActiveModel = dev.into();
         am.ipv4 = Set(Some(ip.ip().to_string()));
         am.last_login_time = Set(Some(now));
         models::system::sys_user_device::Entity::update_safety(am)?
             .exec(db)
             .await?;
-    } else {
-        let am = models::system::sys_user_device::ActiveModel {
-            version: Set(0),
-            id: NotSet,
-            create_time: Set(now),
-            update_time: Set(None),
-            creator_id: Set(None),
-            updater_id: Set(None),
-            del_flag: Set(false),
-            user_id: Set(Some(user_id)),
-            device_id: Set(user_agent.to_string()),
-            ipv4: Set(Some(ip.ip().to_string())),
-            status: Set(0),
-            last_login_time: Set(Some(now)),
-        };
-        models::system::sys_user_device::Entity::insert(am)
-            .exec(db)
-            .await?;
+        return Ok(());
     }
-    Ok(())
+
+    // 首次登记：status 初始化为 0（正常）。
+    let am = models::system::sys_user_device::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        user_id: Set(Some(user_id)),
+        device_id: Set(user_agent.to_string()),
+        ipv4: Set(Some(ip.ip().to_string())),
+        status: Set(0),
+        last_login_time: Set(Some(now)),
+    };
+    // 并发首次登录同设备时，两次 check 都可能查不到（check-then-act
+    // 竞态）；数据库唯一约束冲突（Postgres SQLSTATE 23505）由后插者
+    // 触发，视为已登记成功，直接忽略。
+    match models::system::sys_user_device::Entity::insert(am)
+        .exec(db)
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(DbErr::Exec(RuntimeErr::SqlxError(err)))
+            if matches!(
+                err.as_ref(),
+                sea_orm::sqlx::Error::Database(db_err)
+                    if db_err.code().as_deref() == Some("23505")
+            ) =>
+        {
+            Ok(())
+        },
+        Err(err) => Err(err.into()),
+    }
 }
 
 /// 为用户签发 access/refresh token（含 Redis 会话存储，Redis 不可用时降级）。
@@ -222,7 +250,7 @@ async fn oauth_password_login_inner(
     user_agent: &str,
 ) -> Result<OauthLoginResponse> {
     if !verify_password(password_raw, item.password.clone())? {
-        return Err(anyhow!("Invalid password"));
+        return Err(anyhow!("Invalid username or password"));
     }
 
     // 身份验证通过后，按用户的 access_policy 校验登录环境
@@ -273,7 +301,8 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
         .filter(models::system::sys_user::Column::Id.eq(claims.sub))
         .filter(models::system::sys_user::Column::DelFlag.eq(false))
         .one(&DB_CONN.wait().pg_conn)
-        .await?
+        .await
+        .map_err(internal_error)?
         .ok_or(anyhow!("User not found for token"))?;
     Ok((user.into(), claims))
 }
@@ -285,10 +314,21 @@ const LOGIN_RATE_LIMIT_PER_MINUTE: u32 = 5;
 static LOGIN_FAILURES: Lazy<std::sync::Mutex<std::collections::HashMap<String, (u32, i64)>>> =
     Lazy::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
+/// 清理早于当前窗口的限流条目。条目只对当前窗口计数（跨窗口在下次
+/// 访问时本就会被重置），直接移除过期条目可防止 `LOGIN_FAILURES`
+/// 按唯一 IP 无限累积。
+fn sweep_stale_login_failures(
+    map: &mut std::collections::HashMap<String, (u32, i64)>,
+    window: i64,
+) {
+    map.retain(|_, (_, entry_window)| *entry_window >= window);
+}
+
 fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
     let now = chrono::Utc::now().timestamp();
     let window = now / 60;
     let mut map = LOGIN_FAILURES.lock().unwrap();
+    sweep_stale_login_failures(&mut map, window);
     let entry = map.entry(ip.to_string()).or_insert((0, window));
     if entry.1 != window {
         *entry = (0, window);
@@ -305,6 +345,7 @@ fn record_login_failure(ip: SocketAddr) {
     let now = chrono::Utc::now().timestamp();
     let window = now / 60;
     let mut map = LOGIN_FAILURES.lock().unwrap();
+    sweep_stale_login_failures(&mut map, window);
     let entry = map.entry(ip.to_string()).or_insert((0, window));
     if entry.1 != window {
         *entry = (0, window);
@@ -325,8 +366,14 @@ pub async fn oauth_password_login(
         .filter(models::system::sys_user::Column::DelFlag.eq(false))
         .filter(models::system::sys_user::Column::Username.eq(username))
         .one(&DB_CONN.wait().pg_conn)
-        .await?
-        .ok_or(anyhow!("User not found"))?;
+        .await
+        .map_err(internal_error)?;
+    let Some(item) = item else {
+        // 与“密码错误”返回同一文案并同样计入失败限流，
+        // 避免用户名枚举与无代价探测。
+        record_login_failure(ip);
+        return Err(anyhow!("Invalid username or password"));
+    };
     let user_id = item.id;
 
     let ret = oauth_password_login_inner(item, password_raw, ip, &user_agent).await;
@@ -354,7 +401,8 @@ pub async fn oauth_password_login(
         extra_data: Set(Some(Default::default())),
     }
     .insert(&DB_CONN.wait().pg_conn)
-    .await?;
+    .await
+    .map_err(internal_error)?;
 
     ret
 }
@@ -385,7 +433,8 @@ pub async fn oauth_qq_login(
         .filter(models::system::sys_user::Column::DelFlag.eq(false))
         .filter(models::system::sys_user::Column::Qq.eq(Some(qq_openid)))
         .one(db)
-        .await?
+        .await
+        .map_err(internal_error)?
         .ok_or(anyhow!("QQ account not registered"))?;
     let user_id = item.id;
 
@@ -413,7 +462,8 @@ pub async fn oauth_qq_login(
         extra_data: Set(Some(Default::default())),
     }
     .insert(&DB_CONN.wait().pg_conn)
-    .await?;
+    .await
+    .map_err(internal_error)?;
 
     ret
 }
@@ -437,7 +487,8 @@ pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousRes
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
-        .await?;
+        .await
+        .map_err(internal_error)?;
 
     // 对于匿名/客户端凭据，存储一个空的 payload 或简单标记
     let payload = serde_json::to_string(&serde_json::json!({"anon": true}))?;
@@ -452,7 +503,8 @@ pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousRes
                     EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
                 )),
         )
-        .await?;
+        .await
+        .map_err(internal_error)?;
     redis_conn
         .set_options(
             format!("jwt:refresh:{}:{}", id, refresh_jti),
@@ -463,7 +515,8 @@ pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousRes
                     EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
                 )),
         )
-        .await?;
+        .await
+        .map_err(internal_error)?;
 
     Ok(OauthAnonymousResponse {
         access_token,
@@ -495,7 +548,8 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
 
     let user = models::system::sys_user::Entity::find_safety_by_id(claims.sub)
         .one(&DB_CONN.wait().pg_conn)
-        .await?
+        .await
+        .map_err(internal_error)?
         .ok_or_else(|| anyhow::anyhow!("User not found"))?;
     let vo: SysUserVO = user.clone().into();
 
@@ -505,12 +559,16 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
-        .await?;
+        .await
+        .map_err(internal_error)?;
 
     // 原子 claim 旧 refresh key（GETDEL）：返回 None 说明 key 已不存在
     // （已被轮换/吊销/登出），拒绝重放；同时取出配对 access_jti。
     let refresh_key = format!("jwt:refresh:{}:{}", claims.sub, claims.jti);
-    let old_access_jti: Option<String> = redis_conn.get_del(&refresh_key).await?;
+    let old_access_jti: Option<String> = redis_conn
+        .get_del(&refresh_key)
+        .await
+        .map_err(internal_error)?;
     if old_access_jti.is_none() {
         return Err(anyhow!("Refresh token not found or already used"));
     }
@@ -521,7 +579,8 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
     {
         let _deleted: usize = redis_conn
             .del(format!("jwt:access:{}:{}", claims.sub, old_access_jti))
-            .await?;
+            .await
+            .map_err(internal_error)?;
     }
 
     // 生成新的 jti 和 token（旧 refresh 已作废：轮换后立即失效）
@@ -546,7 +605,8 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
                     EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
                 )),
         )
-        .await?;
+        .await
+        .map_err(internal_error)?;
 
     redis_conn
         .set_options(
@@ -558,7 +618,8 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
                     EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
                 )),
         )
-        .await?;
+        .await
+        .map_err(internal_error)?;
 
     Ok(OauthLoginResponse {
         access_token,

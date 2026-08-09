@@ -72,7 +72,7 @@ pub async fn do_update(
     am.is_final = Set(payload.is_final);
     am.hidden_flag = Set(payload.hidden_flag);
     if let Some(si) = payload.sort_index {
-        am.sort_index = Set(si as i32);
+        am.sort_index = Set(si.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
     }
 
     item_type_model::Entity::update_safety(am)?
@@ -291,7 +291,10 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
     // name 在逻辑上为必填
     let name = payload.name.ok_or(anyhow!("name required"))?;
 
-    let sort_index = payload.sort_index.unwrap_or(0) as i32;
+    let sort_index = payload
+        .sort_index
+        .unwrap_or(0)
+        .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
 
     let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
 

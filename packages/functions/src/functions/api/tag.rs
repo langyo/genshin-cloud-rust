@@ -24,6 +24,13 @@ use _utils::{
     },
 };
 
+/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// 新增标签
 pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResponse> {
     auth.require_non_anonymous()?;
@@ -63,12 +70,26 @@ pub async fn do_update(
         .one(db)
         .await?;
     let t = t.ok_or(anyhow!("Tag not found"))?;
+    let old_tag = t.tag.clone();
+    let new_tag = payload.base.tag;
     let mut am: tag_model::ActiveModel = t.into();
 
-    am.tag = Set(payload.base.tag);
+    am.tag = Set(new_tag.clone());
     am.icon_id = Set(payload.base.icon_id);
 
     tag_model::Entity::update_safety(am)?.exec(db).await?;
+
+    // 改名时同步 tag_type_link（该表以 tag_name 为键，否则旧关联悬空）
+    if new_tag != old_tag {
+        ttl_model::Entity::update_many()
+            .col_expr(
+                ttl_model::Column::TagName,
+                sea_orm::sea_query::Expr::value(new_tag.clone()),
+            )
+            .filter(ttl_model::Column::TagName.eq(old_tag))
+            .exec(db)
+            .await?;
+    }
     super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
@@ -82,7 +103,7 @@ pub async fn do_list(
     let mut query = tag_model::Entity::find_safety();
 
     if let Some(tag) = payload.tag {
-        query = query.filter(tag_model::Column::Tag.like(format!("%{}%", tag)));
+        query = query.filter(tag_model::Column::Tag.like(format!("%{}%", escape_like(&tag))));
     }
     if let Some(icon_id) = payload.icon_id {
         query = query.filter(tag_model::Column::IconId.eq(icon_id));

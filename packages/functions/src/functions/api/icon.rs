@@ -22,6 +22,13 @@ use _utils::{
 };
 
 // 新增图标
+/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 pub async fn do_add(auth: AuthInfo, payload: IconAddRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
@@ -63,7 +70,7 @@ pub async fn do_list(
         query = query.filter(icon_model::Column::Id.is_in(ids));
     }
     if let Some(name) = payload.name {
-        query = query.filter(icon_model::Column::Tag.contains(name));
+        query = query.filter(icon_model::Column::Tag.like(format!("%{}%", escape_like(&name))));
     }
     // 按图标分类（icon_type_link）过滤：icon_id IN (SELECT icon_id FROM icon_type_link WHERE type_id IN ...)
     if let Some(type_ids) = payload.type_id_list {
