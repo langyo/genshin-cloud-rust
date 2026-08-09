@@ -127,8 +127,9 @@ pub async fn do_get_graph(
         return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
     }
     let db = &DB_CONN.wait().pg_conn;
-    // 每个 groupId 返回一个 GraphVo 结构（relations 为该组的 link VO，
-    // relRefs/pathRefs 当前无更丰富的图数据，置空数组）
+    // 每个 groupId 返回一个 GraphVo 结构。前端类型（markerLink.ts GraphVo）声明
+    // relations 为 `Record<string, string[]>`，但该接口前端无调用方；做最小对齐：
+    // relations 改为该组 link 的 id 字符串列表，relRefs/pathRefs 无更丰富的图数据，置空数组。
     let mut map: std::collections::HashMap<String, serde_json::Value> =
         std::collections::HashMap::new();
     for g in payload.group_ids {
@@ -136,7 +137,7 @@ pub async fn do_get_graph(
             .filter(linkage_model::Column::GroupId.eq(g.clone()))
             .all(db)
             .await?;
-        let relations: Vec<MarkerLinkVO> = items.into_iter().map(model_to_vo).collect();
+        let relations: Vec<String> = items.into_iter().map(|it| it.id.to_string()).collect();
         map.insert(
             g,
             serde_json::json!({

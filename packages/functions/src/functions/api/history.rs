@@ -49,6 +49,11 @@ pub async fn do_get_list(
         query = query.filter(history_model::Column::EditType.eq(edit_type));
     }
 
+    // 请求体 `type`（HistoryListRequest.request_type，数字 1..=4）按 history 表的 type 列过滤
+    if let Some(ty) = payload.request_type {
+        query = query.filter(history_model::Column::HistoryType.eq(ty));
+    }
+
     if let Some(ids) = payload.id
         && !ids.is_empty()
     {

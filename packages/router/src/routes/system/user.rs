@@ -51,7 +51,9 @@ pub struct UserRegisterQQParams {
 #[serde(rename_all = "camelCase")]
 pub struct UserUpdateParams {
     /// 用户 ID
-    pub user_id: i64,
+    pub user_id: Option<i64>,
+    /// 用户 ID（前端 InfoEditor 展开 userStore.info 时使用 `id` 字段）
+    pub id: Option<i64>,
     /// 权限策略
     pub access_policy: Option<Vec<AccessPolicyItemEnum>>,
     /// 头像链接
@@ -187,10 +189,14 @@ pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdateParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let uid = payload
+        .user_id
+        .or(payload.id)
+        .ok_or((StatusCode::BAD_REQUEST, "user id is required".to_string()))?;
     Ok(Json(
         do_update(
             auth,
-            payload.user_id,
+            uid,
             payload.access_policy,
             payload.logo,
             payload.nickname,
@@ -234,12 +240,12 @@ pub async fn update_password_by_admin(
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserUpdatePasswordByAdminParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(
+    Ok(Json(
         do_update_password_by_admin(auth, payload.password, payload.user_id)
             .await
-            .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
-            .into_response(),
+            .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
     )
+    .into_response())
 }
 
 /// 删除用户

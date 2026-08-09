@@ -52,6 +52,8 @@ pub struct IconListRequest {
 #[serde(rename_all = "camelCase")]
 pub struct IconVO {
     pub id: i64,
+    /// 乐观锁版本号（前端编辑时随行提交，用于乐观锁校验）
+    pub version: i64,
     pub name: String,
     pub url: String,
 }

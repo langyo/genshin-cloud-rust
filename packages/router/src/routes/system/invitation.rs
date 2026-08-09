@@ -150,15 +150,13 @@ pub async fn info(
     }
 }
 
-/// 使用用户邀请
+/// 使用用户邀请（公开接口：注册流程未登录调用）
 /// POST /invitation/consume
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(payload))]
 pub async fn consume(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationConsumeRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::system::invitation::do_consume(
-        auth,
         payload.code,
         payload.username,
         payload.password,

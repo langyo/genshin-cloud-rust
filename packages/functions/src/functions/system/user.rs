@@ -172,7 +172,7 @@ pub async fn do_update_password_by_admin(
     _auth: AuthInfo,
     password: String,
     user_id: i64,
-) -> Result<()> {
+) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
@@ -181,7 +181,7 @@ pub async fn do_update_password_by_admin(
     let mut am: sys_user_model::ActiveModel = m.into();
     am.password = Set(_utils::bcrypt::generate_storage_password(password)?);
     sys_user_model::Entity::update_safety(am)?.exec(db).await?;
-    Ok(())
+    Ok(CommonResponse::new(Ok(())))
 }
 
 pub async fn do_delete(_auth: AuthInfo, work_id: i64) -> Result<()> {

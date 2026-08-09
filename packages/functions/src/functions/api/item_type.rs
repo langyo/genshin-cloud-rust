@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    QueryFilter, QuerySelect,
+    ExprTrait, QueryFilter, QuerySelect,
     prelude::*,
 };
 
@@ -95,16 +95,26 @@ pub async fn do_get_list(
     self_flag: bool,
     payload: ItemTypeListRequest,
 ) -> Result<CommonResponse<ItemTypeListResponse>> {
-    let _ = self_flag; // reserved for permission filtering
-
     let db = &DB_CONN.wait().pg_conn;
     let mut query = item_type_model::Entity::find_safety();
-    if let Some(type_list) = payload.type_id_list {
-        // -1 表示"全部/无类型"（前端根节点固定传 [-1] 拉全量），
-        // 只对正数 ID 做过滤，避免 id IN (-1) 恒空。
-        let ids: Vec<i64> = type_list.into_iter().filter(|&t| t > 0).collect();
-        if !ids.is_empty() {
-            query = query.filter(item_type_model::Column::Id.is_in(ids));
+    if !self_flag {
+        // typeIdList 语义（物品类型树）：[-1] 返回根类型（parent_id=-1 或自指顶层），
+        // [nodeId] 返回其子级（parent_id IN typeIdList）
+        if let Some(type_list) = payload.type_id_list
+            && !type_list.is_empty()
+        {
+            if type_list.contains(&-1) {
+                query = query.filter(
+                    sea_orm::Condition::any()
+                        .add(item_type_model::Column::ParentId.eq(-1))
+                        .add(
+                            Expr::col(item_type_model::Column::ParentId)
+                                .equals(item_type_model::Column::Id),
+                        ),
+                );
+            } else {
+                query = query.filter(item_type_model::Column::ParentId.is_in(type_list));
+            }
         }
     }
 

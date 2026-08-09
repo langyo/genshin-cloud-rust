@@ -12,7 +12,7 @@ pub async fn delete_notice(
     Path(notice_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::notice::do_delete_notice(auth, notice_id).await {
-        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
 }

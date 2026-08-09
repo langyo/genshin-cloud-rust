@@ -157,13 +157,11 @@ pub async fn do_info(auth: AuthInfo, code: String) -> Result<CommonResponse<serd
 /// 返回 `{userId, result}`，对齐前端 `SysUserInvitationConsumeResultVo`。
 #[allow(clippy::too_many_arguments)]
 pub async fn do_consume(
-    auth: AuthInfo,
     code: String,
     username: Option<String>,
     password: Option<String>,
     nickname: Option<String>,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let inv = inv_model::Entity::find_safety()
         .filter(inv_model::Column::Code.eq(&code))

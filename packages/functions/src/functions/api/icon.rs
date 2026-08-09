@@ -93,6 +93,7 @@ pub async fn do_list(
     for it in items {
         arr.push(IconVO {
             id: it.id,
+            version: it.version,
             name: it.tag,
             url: it.url,
         });
@@ -112,6 +113,7 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Ic
     let item = item.ok_or(anyhow!("Icon not found"))?;
     Ok(CommonResponse::new(Ok(IconVO {
         id: item.id,
+        version: item.version,
         name: item.tag,
         url: item.url,
     })))

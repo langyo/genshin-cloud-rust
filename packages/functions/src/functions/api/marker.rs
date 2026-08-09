@@ -10,8 +10,9 @@ use sea_orm::{
 use std::collections::HashSet;
 
 use _database::{
-    DB_CONN, models::item::item as item_model, models::marker::marker as marker_model,
-    models::marker::marker_item_link as mil_model, models::marker::marker_linkage as linkage_model,
+    DB_CONN, models::item::item as item_model, models::item::item_type_link as itl_model,
+    models::marker::marker as marker_model, models::marker::marker_item_link as mil_model,
+    models::marker::marker_linkage as linkage_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -294,9 +295,10 @@ fn parse_item_entries(item_list: &[Option<serde_json::Value>]) -> Vec<(i64, i32)
 }
 
 /// 批量调整某 marker 的 item 关联（marker_item_link 表）。
-/// 支持的调整类型：Append / InsertIfAbsent / InsertOrUpdate / Merge / Update
-/// （追加或更新 count）、Replace（整表替换）、RemoveLeft / RemoveRight
-/// （移除列出的关联）。
+/// 支持的调整类型：Append / Prepend（仅插入缺失条目，去重）、
+/// InsertIfAbsent / InsertOrUpdate / Merge / Update（追加或更新 count）、
+/// Replace（整表替换）、RemoveLeft / RemoveRight（移除列出的关联）、
+/// TrimLeft / TrimRight（只保留列出的关联）。
 async fn tweak_item_list(
     db: &sea_orm::DatabaseConnection,
     marker_id: i64,
@@ -344,12 +346,30 @@ async fn tweak_item_list(
                 }
             }
         },
-        // Append / Prepend / InsertIfAbsent / InsertOrUpdate / Merge / Update：
+        // Append / Prepend：仅插入缺失条目（去重），已存在的不动。
+        // marker_item_link 无排序列，Prepend 与 Append 落库结果等价（顺序由查询方决定）。
+        MarkerTweakConfigTypeEnum::Append | MarkerTweakConfigTypeEnum::Prepend => {
+            for (item_id, count) in entries {
+                if !existing_map.contains_key(&item_id) {
+                    insert_item_link(db, marker_id, item_id, count).await?;
+                }
+            }
+        },
+        // Trim：只保留 item_list 中列出的关联（其余软删）。
+        MarkerTweakConfigTypeEnum::TrimLeft | MarkerTweakConfigTypeEnum::TrimRight => {
+            let keep: HashSet<i64> = entries.iter().map(|(id, _)| *id).collect();
+            for (item_id, link) in existing_map.iter() {
+                if !keep.contains(item_id) {
+                    mil_model::Entity::delete_safety(link.clone().into())?
+                        .exec(db)
+                        .await?;
+                }
+            }
+        },
+        // InsertIfAbsent / InsertOrUpdate / Merge / Update：
         // 追加或更新 count；InsertIfAbsent 对已存在条目跳过。
-        // 其余类型（Trim*/ReplaceRegex 等）对 item 列表无意义，忽略。
-        MarkerTweakConfigTypeEnum::Append
-        | MarkerTweakConfigTypeEnum::Prepend
-        | MarkerTweakConfigTypeEnum::InsertIfAbsent
+        // 其余类型（ReplaceRegex 等）对 item 列表无意义，忽略。
+        MarkerTweakConfigTypeEnum::InsertIfAbsent
         | MarkerTweakConfigTypeEnum::InsertOrUpdate
         | MarkerTweakConfigTypeEnum::Merge
         | MarkerTweakConfigTypeEnum::Update => {
@@ -491,24 +511,82 @@ pub async fn do_update_single(
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }
 
+/// 按 MarkerFilterRequest 的筛选条件收集命中点位 id 集合：
+/// - item_id_list：marker_item_link.item_id 命中
+/// - area_id_list：经 item.area_id 命中（marker 表无 area_id 列，经关联物品过滤）
+/// - type_id_list：经 item_type_link.type_id 命中（item 表无 type 列）
+/// - ���ε���ͬʱ����ʱȡ��������δ����ʱ���� None�����÷�����ȫ������
+async fn collect_filtered_marker_ids(
+    db: &sea_orm::DatabaseConnection,
+    payload: &MarkerFilterRequest,
+) -> Result<Option<HashSet<i64>>> {
+    let mut item_ids: Option<HashSet<i64>> = None;
+    if let Some(ids) = &payload.item_id_list {
+        item_ids = Some(ids.iter().copied().collect());
+    }
+    if let Some(area_ids) = &payload.area_id_list {
+        let mut area_items: HashSet<i64> = HashSet::new();
+        for chunk in area_ids.chunks(1000) {
+            for it in item_model::Entity::find_safety()
+                .filter(item_model::Column::AreaId.is_in(chunk))
+                .all(db)
+                .await?
+            {
+                area_items.insert(it.id);
+            }
+        }
+        item_ids = match item_ids {
+            Some(mut prev) => {
+                prev.retain(|id| area_items.contains(id));
+                Some(prev)
+            },
+            None => Some(area_items),
+        };
+    }
+    if let Some(type_ids) = &payload.type_id_list {
+        let mut type_items: HashSet<i64> = HashSet::new();
+        for chunk in type_ids.chunks(1000) {
+            for it in itl_model::Entity::find_safety()
+                .filter(itl_model::Column::TypeId.is_in(chunk))
+                .all(db)
+                .await?
+            {
+                type_items.insert(it.item_id);
+            }
+        }
+        item_ids = match item_ids {
+            Some(mut prev) => {
+                prev.retain(|id| type_items.contains(id));
+                Some(prev)
+            },
+            None => Some(type_items),
+        };
+    }
+    let Some(item_ids) = item_ids else {
+        return Ok(None);
+    };
+    let mut marker_ids: HashSet<i64> = HashSet::new();
+    let item_vec: Vec<i64> = item_ids.into_iter().collect();
+    for chunk in item_vec.chunks(1000) {
+        for l in mil_model::Entity::find_safety()
+            .filter(mil_model::Column::ItemId.is_in(chunk))
+            .all(db)
+            .await?
+        {
+            marker_ids.insert(l.marker_id);
+        }
+    }
+    Ok(Some(marker_ids))
+}
+
 pub async fn do_get_id(
     _auth: AuthInfo,
     payload: MarkerFilterRequest,
 ) -> Result<CommonResponse<Vec<i64>>> {
     let db = &DB_CONN.wait().pg_conn;
 
-    // 如果提供了 item_id_list，则从 marker_item_link 收集 marker id
-    if let Some(item_ids) = payload.item_id_list {
-        let mut links: Vec<mil_model::Model> = Vec::new();
-        for chunk in item_ids.chunks(1000) {
-            links.extend(
-                mil_model::Entity::find_safety()
-                    .filter(mil_model::Column::ItemId.is_in(chunk))
-                    .all(db)
-                    .await?,
-            );
-        }
-        let ids: HashSet<i64> = links.into_iter().map(|l| l.marker_id).collect();
+    // itemIdList / areaIdList / typeIdList 任一命中即按条件过滤（多条件取交集）
+    if let Some(ids) = collect_filtered_marker_ids(db, &payload).await? {
         let mut v: Vec<i64> = ids.into_iter().collect();
         v.sort_unstable();
         return Ok(CommonResponse::new(Ok(v)));
@@ -531,27 +609,18 @@ pub async fn do_get_list_by_info(
     let db = &DB_CONN.wait().pg_conn;
 
     // 重用 do_get_id 的逻辑获取 id 列表，然后查询模型
-    let ids = if let Some(item_ids) = payload.item_id_list {
-        let mut links: Vec<mil_model::Model> = Vec::new();
-        for chunk in item_ids.chunks(1000) {
-            links.extend(
-                mil_model::Entity::find_safety()
-                    .filter(mil_model::Column::ItemId.is_in(chunk))
-                    .all(db)
-                    .await?,
-            );
-        }
-        let ids: HashSet<i64> = links.into_iter().map(|l| l.marker_id).collect();
-        let mut v: Vec<i64> = ids.into_iter().collect();
-        v.sort_unstable();
-        v
-    } else {
-        marker_model::Entity::find_safety()
+    let ids = match collect_filtered_marker_ids(db, &payload).await? {
+        Some(ids) => {
+            let mut v: Vec<i64> = ids.into_iter().collect();
+            v.sort_unstable();
+            v
+        },
+        None => marker_model::Entity::find_safety()
             .all(db)
             .await?
             .into_iter()
             .map(|m| m.id)
-            .collect()
+            .collect(),
     };
 
     if ids.is_empty() {
