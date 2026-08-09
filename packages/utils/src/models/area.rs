@@ -24,11 +24,14 @@ pub struct AreaRequest {
     /// 是否为末端地区
     pub is_final: bool,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 排序
+    #[serde(default)]
     pub sort_index: i32,
     /// 额外标记
     /// 低位第一位：前台是否显示
+    #[serde(default)]
     pub special_flag: i32,
 }
 

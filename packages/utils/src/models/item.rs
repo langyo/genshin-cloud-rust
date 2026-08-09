@@ -16,20 +16,25 @@ pub struct ItemRequest {
     pub area_id: i64,
     /// 默认刷新时间
     /// 单位为毫秒
+    #[serde(default)]
     pub default_refresh_time: i64,
     /// 默认描述模板
     /// 用于提交新物品点位时的描述模板
     pub default_content: Option<String>,
     /// 默认数量
+    #[serde(default)]
     pub default_count: i32,
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
     /// 图标样式类型
+    #[serde(default)]
     pub icon_style_type: IconStyleType,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 物品排序
+    #[serde(default)]
     pub sort_index: i32,
     /// 特殊物品标记
     /// 低位第一位: 前台是否显示
@@ -43,14 +48,18 @@ pub struct ItemAddRequest {
     /// 地区 ID
     pub area_id: i64,
     /// 默认描述模板
+    #[serde(default)]
     pub default_content: String,
     /// 默认点位计数
+    #[serde(default)]
     pub default_count: i64,
     /// 默认刷新时间
     pub default_refresh_time: Option<i64>,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 物品显示类型
+    #[serde(default)]
     pub icon_style_type: IconStyleType,
     /// 图标标签
     #[serde(default)]
@@ -63,8 +72,10 @@ pub struct ItemAddRequest {
     /// 排序
     pub sort_index: Option<i64>,
     /// 特殊物品标记，二进制表示；低位第一位：是否为显示物品
+    #[serde(default)]
     pub special_flag: i64,
     /// 物品类型 ID 列表
+    #[serde(default)]
     pub type_id_list: Vec<i64>,
 }
 
@@ -75,14 +86,18 @@ pub struct ItemUpdateData {
     /// 地区 ID
     pub area_id: i64,
     /// 默认描述模板
+    #[serde(default)]
     pub default_content: String,
     /// 默认点位计数
+    #[serde(default)]
     pub default_count: i64,
     /// 默认刷新时间
     pub default_refresh_time: Option<i64>,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 物品显示类型
+    #[serde(default)]
     pub icon_style_type: IconStyleType,
     /// 图标标签
     #[serde(default)]
@@ -97,8 +112,10 @@ pub struct ItemUpdateData {
     /// 排序
     pub sort_index: Option<i64>,
     /// 特殊物品标记，二进制表示；低位第一位：是否为显示物品
+    #[serde(default)]
     pub special_flag: i64,
     /// 物品类型 ID 列表
+    #[serde(default)]
     pub type_id_list: Vec<i64>,
 }
 

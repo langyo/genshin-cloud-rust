@@ -63,6 +63,7 @@ use crate::models::wrapper::Pagination;
 pub struct NoticeAddRequest {
     pub channel: Vec<NoticeChannel>,
     pub content: String,
+    #[serde(default)]
     pub sort_index: i64,
     pub title: String,
     /// 有效期：接受毫秒数字或 ISO 字符串（前端 el-date-picker 默认序列化为 ISO 字符串）

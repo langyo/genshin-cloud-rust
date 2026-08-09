@@ -61,6 +61,12 @@ pub enum HiddenFlag {
     Suprise = 3,
 }
 
+impl Default for HiddenFlag {
+    fn default() -> Self {
+        HiddenFlag::Visible
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum HistoryEditType {
