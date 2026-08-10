@@ -390,6 +390,36 @@ fn record_login_failure(ip: SocketAddr) {
     entry.0 += 1;
 }
 
+/// 写登录审计日志（成功/失败统一入口）。失败路径（限流命中、用户不存在、
+/// QQ 未注册、密码错误）同样落库保证审计完整；user_id 未知时记 None。
+/// 审计写入失败不影响登录主流程（调用方按需忽略/透传）。
+async fn record_login_log(
+    user_id: Option<i64>,
+    ip: SocketAddr,
+    user_agent: &str,
+    is_error: bool,
+) -> Result<()> {
+    models::system::sys_action_log::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(chrono::Utc::now().naive_utc()),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        user_id: Set(user_id),
+        ipv4: Set(Some(ip.ip().to_string())),
+        device_id: Set(user_agent.to_string()),
+        action: Set(SystemActionLogAction::Login),
+        is_error: Set(is_error),
+        extra_data: Set(Some(Default::default())),
+    }
+    .insert(&DB_CONN.wait().pg_conn)
+    .await
+    .map_err(internal_error)?;
+    Ok(())
+}
+
 pub async fn oauth_password_login(
     username: String,
     password_raw: String,
@@ -397,7 +427,11 @@ pub async fn oauth_password_login(
     user_agent: String,
 ) -> Result<OauthLoginResponse> {
     // 限流检查在用户名查询之前：避免攻击者用无效用户名做无代价探测。
-    check_login_rate_limit(ip)?;
+    if let Err(e) = check_login_rate_limit(ip) {
+        // 限流命中同样写失败审计日志（user_id 未知，记 None）
+        let _ = record_login_log(None, ip, &user_agent, true).await;
+        return Err(e);
+    }
 
     let item = models::system::sys_user::Entity::find()
         .filter(models::system::sys_user::Column::DelFlag.eq(false))
@@ -409,6 +443,8 @@ pub async fn oauth_password_login(
         // 与“密码错误”返回同一文案并同样计入失败限流，
         // 避免用户名枚举与无代价探测。
         record_login_failure(ip);
+        // 用户不存在同样写失败审计日志（user_id 未知，记 None）
+        let _ = record_login_log(None, ip, &user_agent, true).await;
         return Err(anyhow!("Invalid username or password"));
     };
     let user_id = item.id;
@@ -422,24 +458,8 @@ pub async fn oauth_password_login(
         let _ = record_device(user_id, ip, &user_agent).await;
     }
 
-    models::system::sys_action_log::ActiveModel {
-        version: Set(0),
-        id: NotSet,
-        create_time: Set(chrono::Utc::now().naive_utc()),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
-        del_flag: Set(false),
-        user_id: Set(Some(user_id)),
-        ipv4: Set(Some(ip.ip().to_string())),
-        device_id: Set(user_agent),
-        action: Set(SystemActionLogAction::Login),
-        is_error: Set(ret.is_err()),
-        extra_data: Set(Some(Default::default())),
-    }
-    .insert(&DB_CONN.wait().pg_conn)
-    .await
-    .map_err(internal_error)?;
+    // 成功/失败（密码错误）统一写审计日志
+    record_login_log(Some(user_id), ip, &user_agent, ret.is_err()).await?;
 
     ret
 }
@@ -466,13 +486,20 @@ pub async fn oauth_qq_login(
     user_agent: String,
 ) -> Result<OauthLoginResponse> {
     let db = &DB_CONN.wait().pg_conn;
-    let item = models::system::sys_user::Entity::find()
+    let item = match models::system::sys_user::Entity::find()
         .filter(models::system::sys_user::Column::DelFlag.eq(false))
         .filter(models::system::sys_user::Column::Qq.eq(Some(qq_openid)))
         .one(db)
         .await
         .map_err(internal_error)?
-        .ok_or(anyhow!("QQ account not registered"))?;
+    {
+        Some(item) => item,
+        // QQ 未注册：写失败审计日志（user_id 未知，记 None）后拒绝
+        None => {
+            let _ = record_login_log(None, ip, &user_agent, true).await;
+            return Err(anyhow!("QQ account not registered"));
+        },
+    };
     let user_id = item.id;
 
     // 身份由 openid 提供；同样校验登录环境
@@ -483,24 +510,7 @@ pub async fn oauth_qq_login(
     if ret.is_ok() {
         let _ = record_device(user_id, ip, &user_agent).await;
     }
-    models::system::sys_action_log::ActiveModel {
-        version: Set(0),
-        id: NotSet,
-        create_time: Set(chrono::Utc::now().naive_utc()),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
-        del_flag: Set(false),
-        user_id: Set(Some(user_id)),
-        ipv4: Set(Some(ip.ip().to_string())),
-        device_id: Set(user_agent),
-        action: Set(SystemActionLogAction::Login),
-        is_error: Set(ret.is_err()),
-        extra_data: Set(Some(Default::default())),
-    }
-    .insert(&DB_CONN.wait().pg_conn)
-    .await
-    .map_err(internal_error)?;
+    record_login_log(Some(user_id), ip, &user_agent, ret.is_err()).await?;
 
     ret
 }
