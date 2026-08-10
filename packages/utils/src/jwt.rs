@@ -296,6 +296,11 @@ pub struct Claims {
 
 pub static EXPIRED_APPEND_DURATION: chrono::Duration = chrono::Duration::days(15);
 
+/// Refresh token 有效期：与 refresh JWT exp（30 天）保持一致。
+/// Redis `jwt:refresh:` 键的 TTL 必须使用本常量，避免键先于 JWT 过期
+/// 导致「JWT 仍有效但刷新失败」（行为随 Redis 可用性漂移）。
+pub static REFRESH_APPEND_DURATION: chrono::Duration = chrono::Duration::days(30);
+
 pub async fn generate_token(
     now: DateTime<Utc>,
     user_id: i64,

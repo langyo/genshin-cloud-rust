@@ -13,7 +13,7 @@ use _database::{DB_CONN, models};
 use _utils::{
     bcrypt::verify_password,
     db_operations::SafeEntityTrait,
-    jwt::{Claims, EXPIRED_APPEND_DURATION, generate_token, verify_token},
+    jwt::{Claims, EXPIRED_APPEND_DURATION, REFRESH_APPEND_DURATION, generate_token, verify_token},
     models::SysUserVO,
     types::{
         AccessPolicyItemEnum, AccessPolicyList, SystemActionLogAction, SystemUserRole,
@@ -222,7 +222,7 @@ async fn issue_token(item: &models::system::sys_user::Model) -> Result<OauthLogi
                 SetOptions::default()
                     .conditional_set(redis::ExistenceCheck::NX)
                     .with_expiration(redis::SetExpiry::EX(
-                        EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                        REFRESH_APPEND_DURATION.as_seconds_f32() as u64,
                     )),
             )
             .await;
@@ -571,7 +571,7 @@ pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousRes
                 SetOptions::default()
                     .conditional_set(redis::ExistenceCheck::NX)
                     .with_expiration(redis::SetExpiry::EX(
-                        EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                        REFRESH_APPEND_DURATION.as_seconds_f32() as u64,
                     )),
             )
             .await;
@@ -710,7 +710,7 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(
-                    EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                    REFRESH_APPEND_DURATION.as_seconds_f32() as u64,
                 )),
         )
         .await
