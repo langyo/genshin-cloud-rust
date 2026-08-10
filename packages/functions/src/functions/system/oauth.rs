@@ -16,7 +16,7 @@ use _utils::{
     jwt::{Claims, EXPIRED_APPEND_DURATION, generate_token, verify_token},
     models::SysUserVO,
     types::{
-        AccessPolicyItemEnum, SystemActionLogAction,
+        AccessPolicyItemEnum, AccessPolicyList, SystemActionLogAction, SystemUserRole,
         auth::{OauthAnonymousResponse, OauthLoginResponse, OauthScopeType, OauthTokenType},
     },
 };
@@ -260,6 +260,25 @@ async fn oauth_password_login_inner(
     issue_token(&item).await
 }
 
+/// 匿名（client_credentials）身份 VO：id=0 + VISITOR 角色。
+///
+/// `AuthInfo::is_anonymous` / `require_non_anonymous`（jwt.rs）只按
+/// `info.id == 0` 判定，因此构造 id=0 即自动实现：只读接口放行、
+/// 写操作（require_non_anonymous）拒绝。
+fn anonymous_vo() -> SysUserVO {
+    SysUserVO {
+        id: 0,
+        username: "anonymous".into(),
+        nickname: None,
+        qq: None,
+        phone: None,
+        logo: None,
+        role_id: SystemUserRole::Visitor,
+        access_policy: AccessPolicyList(vec![]),
+        remark: None,
+    }
+}
+
 pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
     let claims = verify_token(&token).await?;
 
@@ -279,7 +298,7 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
         match redis_client.get_multiplexed_async_connection().await {
             Ok(mut redis_conn) => match redis_conn.get::<String>(key).await {
                 // 会话命中：以 Redis 中缓存的 VO 为准
-                Ok(Some(item)) => return Ok((serde_json::from_str(&item)?, claims)),
+                Ok(Some(item)) => return parse_cached_payload(&item, &claims),
                 // 键明确不存在 = 吊销已生效（登出/踢出/改密/刷新轮换）
                 Ok(None) => return Err(anyhow!("Token revoked")),
                 // Redis 命令失败（连接中断等）→ 无法判定存在性
@@ -296,6 +315,11 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
         }
     }
 
+    // 匿名身份（sub=0）不需要也不能查库（库中无 id=0 用户），直接构造匿名 VO。
+    if claims.sub == 0 {
+        return Ok((anonymous_vo(), claims));
+    }
+
     // Fallback: look up user from DB by the JWT subject (user_id)
     let user = models::system::sys_user::Entity::find()
         .filter(models::system::sys_user::Column::Id.eq(claims.sub))
@@ -305,6 +329,16 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
         .map_err(internal_error)?
         .ok_or(anyhow!("User not found for token"))?;
     Ok((user.into(), claims))
+}
+
+/// 解析 Redis 中缓存的 access payload：`{"anon":true}`（client_credentials
+/// 发牌）→ 构造匿名 VO；否则按 `SysUserVO` 反序列化用户 VO。
+fn parse_cached_payload(item: &str, claims: &Claims) -> Result<(SysUserVO, Claims)> {
+    let value: serde_json::Value = serde_json::from_str(item)?;
+    if value.get("anon").and_then(serde_json::Value::as_bool) == Some(true) {
+        return Ok((anonymous_vo(), claims.clone()));
+    }
+    Ok((serde_json::from_value::<SysUserVO>(value)?, claims.clone()))
 }
 
 /// 登录暴力破解限流：按 IP 固定窗口（每分钟最多 5 次失败的密码登录尝试）。
@@ -484,42 +518,38 @@ pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousRes
     let access_token = generate_token(now, id, access_jti, "access").await?;
     let _refresh_token = generate_token(now, id, refresh_jti, "refresh").await?;
 
-    let mut redis_conn = DB_CONN
-        .wait()
-        .redis_conn
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(internal_error)?;
+    // Redis 不可用时静默跳过（与 issue_token 一致）：降级模式下
+    // `oauth_parse_token` 对 sub=0 特判构造匿名 VO，不发 Redis 键也能解析；
+    // REDIS_REQUIRED=true 的 fail-closed 语义由解析侧（oauth_parse_token）保证。
+    if let Some(redis_client) = &DB_CONN.wait().redis_conn
+        && let Ok(mut redis_conn) = redis_client.get_multiplexed_async_connection().await
+    {
+        // 对于匿名/客户端凭据，存储一个空的 payload 或简单标记
+        let payload = serde_json::to_string(&serde_json::json!({"anon": true}))?;
 
-    // 对于匿名/客户端凭据，存储一个空的 payload 或简单标记
-    let payload = serde_json::to_string(&serde_json::json!({"anon": true}))?;
-
-    redis_conn
-        .set_options(
-            format!("jwt:access:{}:{}", id, access_jti),
-            payload,
-            SetOptions::default()
-                .conditional_set(redis::ExistenceCheck::NX)
-                .with_expiration(redis::SetExpiry::EX(
-                    EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
-                )),
-        )
-        .await
-        .map_err(internal_error)?;
-    redis_conn
-        .set_options(
-            format!("jwt:refresh:{}:{}", id, refresh_jti),
-            access_jti.to_string(),
-            SetOptions::default()
-                .conditional_set(redis::ExistenceCheck::NX)
-                .with_expiration(redis::SetExpiry::EX(
-                    EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
-                )),
-        )
-        .await
-        .map_err(internal_error)?;
+        let _ = redis_conn
+            .set_options(
+                format!("jwt:access:{}:{}", id, access_jti),
+                payload,
+                SetOptions::default()
+                    .conditional_set(redis::ExistenceCheck::NX)
+                    .with_expiration(redis::SetExpiry::EX(
+                        EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                    )),
+            )
+            .await;
+        let _ = redis_conn
+            .set_options(
+                format!("jwt:refresh:{}:{}", id, refresh_jti),
+                access_jti.to_string(),
+                SetOptions::default()
+                    .conditional_set(redis::ExistenceCheck::NX)
+                    .with_expiration(redis::SetExpiry::EX(
+                        EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                    )),
+            )
+            .await;
+    }
 
     Ok(OauthAnonymousResponse {
         access_token,
@@ -549,6 +579,12 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
         return Err(anyhow!("Not a refresh token"));
     }
 
+    // 匿名身份（sub=0）从不签发 refresh token（OauthAnonymousResponse 无
+    // refresh_token 字段），提前拒绝，避免查询不存在的用户行。
+    if claims.sub == 0 {
+        return Err(anyhow!("Anonymous identity cannot be refreshed"));
+    }
+
     let user = models::system::sys_user::Entity::find_safety_by_id(claims.sub)
         .one(&DB_CONN.wait().pg_conn)
         .await
@@ -556,14 +592,30 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
         .ok_or_else(|| anyhow::anyhow!("User not found"))?;
     let vo: SysUserVO = user.clone().into();
 
-    let mut redis_conn = DB_CONN
-        .wait()
-        .redis_conn
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(internal_error)?;
+    // 降级策略（与 oauth_parse_token 一致，补齐与密码登录 issue_token 的
+    // 对齐，M1）：
+    // - Redis 可达：原子 GETDEL 轮换（旧 refresh 立即作废，吊销旧 access）；
+    // - REDIS_REQUIRED=true 且 Redis 不可达：fail-closed，拒绝刷新；
+    // - REDIS_REQUIRED=false 且 Redis 不可达：降级为「只验 JWT 签名 +
+    //   token_type + 用户存在」，**不轮换**（旧 refresh token 仍有效），
+    //   直接签发新 token 对（issue_token 内部同样静默跳过 Redis 存储）。
+    let redis_required = std::env::var("REDIS_REQUIRED").as_deref() == Ok("true");
+    let redis_conn = match &DB_CONN.wait().redis_conn {
+        Some(client) => match client.get_multiplexed_async_connection().await {
+            Ok(conn) => Some(conn),
+            Err(_) if redis_required => {
+                return Err(anyhow!("Redis unavailable (REDIS_REQUIRED=true)"));
+            },
+            Err(_) => None,
+        },
+        None if redis_required => {
+            return Err(anyhow!("Redis unavailable (REDIS_REQUIRED=true)"));
+        },
+        None => None,
+    };
+    let Some(mut redis_conn) = redis_conn else {
+        return issue_token(&user).await;
+    };
 
     // 原子 claim 旧 refresh key（GETDEL）：返回 None 说明 key 已不存在
     // （已被轮换/吊销/登出），拒绝重放；同时取出配对 access_jti。
