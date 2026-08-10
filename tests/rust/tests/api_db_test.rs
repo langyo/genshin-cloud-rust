@@ -1472,7 +1472,7 @@ async fn area_and_item_doc_business_assertions() {
             Some(r#"{"anon":true}"#),
             "anon access key stores the marker payload"
         );
-        let _ = r
+        let _: i64 = r
             .del(format!("jwt:access:0:{}", anon.jti))
             .await
             .expect("cleanup anon key");
