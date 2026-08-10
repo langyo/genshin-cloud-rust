@@ -72,7 +72,17 @@ pub fn is_rsa_signing() -> bool {
 }
 
 /// The active signing algorithm.
-pub fn jwt_alg() -> Algorithm {
+/// HS256 verification is opt-in via `JWT_ACCEPT_HS256=true` (local/dev only);
+/// RSA mode never accepts HMAC signatures by default.
+fn accept_alg(alg: Algorithm) -> bool {
+    if alg == Algorithm::HS256 {
+        std::env::var("JWT_ACCEPT_HS256").as_deref() == Ok("true")
+    } else {
+        true
+    }
+}
+
+fn jwt_alg() -> Algorithm {
     if is_rsa_signing() {
         Algorithm::RS256
     } else {
@@ -270,6 +280,10 @@ mod jwt_numeric_date {
 pub struct Claims {
     pub sub: i64,
     pub jti: Uuid,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub iss: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub aud: String,
     #[serde(with = "jwt_numeric_date")]
     pub iat: DateTime<Utc>,
     #[serde(with = "jwt_numeric_date")]
@@ -287,12 +301,15 @@ pub async fn generate_token(
     user_id: i64,
     jti: Uuid,
     token_type: &str,
+    ttl: chrono::Duration,
 ) -> Result<String> {
     let claims = Claims {
         sub: user_id,
         jti,
+        iss: "genshin-cloud".to_string(),
+        aud: "genshin-map".to_string(),
         iat: now,
-        exp: now + EXPIRED_APPEND_DURATION,
+        exp: now + ttl,
         token_type: Some(token_type.to_string()),
     };
 
@@ -304,7 +321,13 @@ pub async fn verify_token(token: &str) -> Result<Claims> {
     // before an RSA/HS256 migration stay verifiable.
     let mut last_err = None;
     for (key, alg) in decoding_key_pairs() {
-        match decode::<Claims>(token, key, &Validation::new(alg)) {
+        if !accept_alg(alg) {
+            continue;
+        }
+        let mut validation = Validation::new(alg);
+        validation.set_issuer(&["genshin-cloud"]);
+        validation.set_audience(&["genshin-map"]);
+        match decode::<Claims>(token, key, &validation) {
             Ok(token_data) => return Ok(token_data.claims),
             Err(e) => last_err = Some(e),
         }
