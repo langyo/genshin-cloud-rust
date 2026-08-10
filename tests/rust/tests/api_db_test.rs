@@ -1311,8 +1311,8 @@ async fn area_and_item_doc_business_assertions() {
             ttl > 0 && ttl <= 15_i64 * 24 * 3600,
             "session key TTL within the 15-day window"
         );
-        let _ = r.del(&access_key).await.expect("cleanup access key");
-        let _ = r.del(&refresh_key).await.expect("cleanup refresh key");
+        let _: i64 = r.del(&access_key).await.expect("cleanup access key");
+        let _: i64 = r.del(&refresh_key).await.expect("cleanup refresh key");
     } else {
         eprintln!("skipping Redis session-key assertions (no reachable Redis)");
     }
