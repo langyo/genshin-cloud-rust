@@ -1405,11 +1405,11 @@ async fn area_and_item_doc_business_assertions() {
             .await
             .expect("redis get new refresh key");
         assert!(new_refresh_val.is_some(), "new refresh key stored");
-        let _ = r
+        let _: i64 = r
             .del(format!("jwt:access:{}:{}", uid_refresh, r2.jti))
             .await
             .expect("cleanup new access key");
-        let _ = r
+        let _: i64 = r
             .del(format!(
                 "jwt:refresh:{}:{}",
                 uid_refresh, r2_refresh_claims.jti
