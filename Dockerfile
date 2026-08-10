@@ -18,7 +18,6 @@ COPY packages/utils/Cargo.toml      packages/utils/Cargo.toml
 COPY packages/database/Cargo.toml   packages/database/Cargo.toml
 COPY packages/functions/Cargo.toml  packages/functions/Cargo.toml
 COPY packages/router/Cargo.toml     packages/router/Cargo.toml
-COPY scripts/                     scripts/
 COPY tests/rust/Cargo.toml          tests/rust/Cargo.toml
 
 # Stub member sources so cargo can resolve the workspace without the real code,
