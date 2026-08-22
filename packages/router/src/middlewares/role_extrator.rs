@@ -16,10 +16,12 @@ async fn authorize<S: Send + Sync>(
     parts: &mut Parts,
     state: &S,
     threshold: SystemUserRole,
-) -> Result<AuthInfo, Response> {
+) -> Result<AuthInfo, Box<Response>> {
     let ExtractAuthInfo(auth) = ExtractAuthInfo::from_request_parts(parts, state).await?;
     if (auth.info.role_id as i32) > (threshold as i32) {
-        return Err((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+        return Err((StatusCode::FORBIDDEN, "Forbidden".to_string())
+            .into_response()
+            .into());
     }
     Ok(auth)
 }
@@ -38,6 +40,7 @@ where
         authorize(parts, state, SystemUserRole::MapPunctuate)
             .await
             .map(Self)
+            .map_err(|boxed| *boxed)
     }
 }
 
@@ -56,6 +59,7 @@ where
         authorize(parts, state, SystemUserRole::MapManager)
             .await
             .map(Self)
+            .map_err(|boxed| *boxed)
     }
 }
 
