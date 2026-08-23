@@ -110,7 +110,10 @@ jobs:
   # registered for this repository — every delegated run queued forever and
   # blocked all merges (required check).
   commit-msg:
-    name: Commit Message Lint
+    # Must match the branch-protection required context exactly (the
+    # delegated reusable workflow reported as "Commit Message Lint /
+    # Lint commit messages"; keeping the old name keeps protection green).
+    name: Commit Message Lint / Lint commit messages
     runs-on: ubuntu-latest
     permissions:
       contents: read
