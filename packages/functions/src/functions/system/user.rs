@@ -29,7 +29,6 @@ pub async fn do_register(
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
     logo: Option<String>,
     remark: Option<String>,
-    role_id: Option<SystemUserRole>,
     username: String,
     password: String,
 ) -> Result<CommonResponse<i64>> {
@@ -62,7 +61,10 @@ pub async fn do_register(
         qq: Set(None),
         phone: Set(None),
         logo: Set(logo),
-        role_id: Set(role_id.unwrap_or(SystemUserRole::MapUser)),
+        // Java SysUserService.registerUser 恒以 MAP_USER 落库：注册接口虽归
+        // MAP_MANAGER 使用，但管理员也不能借注册直接造出高权账号（越权面）。
+        // 请求中的 roleId 一律忽略；提权只能走 /system/user/update（仅 Admin）。
+        role_id: Set(SystemUserRole::MapUser),
         access_policy: Set(access_policy.map(_utils::types::AccessPolicyList)),
         remark: Set(Some(remark.unwrap_or_default())),
     };

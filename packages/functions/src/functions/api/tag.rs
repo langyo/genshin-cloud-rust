@@ -199,6 +199,24 @@ pub async fn do_update_type(
         .await?
         .ok_or_else(|| anyhow!("Tag not found"))?;
 
+    // Java TagService.updateTypeInTag：typeIdList 中存在未创建的类型即报错
+    if !payload.type_id_list.is_empty() {
+        let existing: std::collections::HashSet<i64> =
+            _database::models::tag::tag_type::Entity::find_safety()
+                .filter(
+                    _database::models::tag::tag_type::Column::Id
+                        .is_in(payload.type_id_list.clone()),
+                )
+                .all(db)
+                .await?
+                .into_iter()
+                .map(|t| t.id)
+                .collect();
+        if payload.type_id_list.iter().any(|t| !existing.contains(t)) {
+            return Err(anyhow!("类型ID错误"));
+        }
+    }
+
     // 删除该 tag 的旧关联
     let links = ttl_model::Entity::find_safety()
         .filter(ttl_model::Column::TagName.eq(&payload.tag))
@@ -284,7 +302,16 @@ pub async fn do_delete_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
         .filter(tag_model::Column::Tag.eq(&tag_name))
         .one(db)
         .await?
-        .ok_or(anyhow!("Tag not found"))?;
+        .ok_or(anyhow!("无删除的标签"))?;
+    // Java deleteTag：先删 tag_type_link 再删 tag，避免悬空关联
+    ttl_model::Entity::update_many()
+        .col_expr(
+            ttl_model::Column::DelFlag,
+            sea_orm::sea_query::Expr::value(true),
+        )
+        .filter(ttl_model::Column::TagName.eq(&tag_name))
+        .exec(db)
+        .await?;
     let mut am: tag_model::ActiveModel = t.into();
     am.del_flag = Set(true);
     tag_model::Entity::delete_safety(am)?.exec(db).await?;

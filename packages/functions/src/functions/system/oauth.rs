@@ -280,9 +280,13 @@ async fn oauth_password_login_inner(
         return Err(anyhow!("Invalid username or password"));
     }
 
-    // 身份验证通过后，按用户的 access_policy 校验登录环境
+    // 身份验证通过后，按用户的 access_policy 校验登录环境。
+    // Java `AuthorizationServerConfiguration.checkDeviceAccess`：策略不命中只
+    // 影响提示信息与审计日志，登录仍然成功 —— 对齐为「警告放行」而非拒绝。
     let policy: Vec<_> = item.access_policy.clone().map(|a| a.0).unwrap_or_default();
-    check_access_policy(item.id, &policy, ip, user_agent).await?;
+    if let Err(e) = check_access_policy(item.id, &policy, ip, user_agent).await {
+        tracing::warn!(user_id = item.id, error = %e, "access policy violation (allowed through, Java-compatible)");
+    }
 
     issue_token(&item).await
 }
@@ -676,7 +680,9 @@ pub async fn oauth_refresh(
     // 挡登录、旧 refresh 可在 30 天窗口内无限轮换，策略形同虚设）。
     // 无策略用户（空 policy）天然放行；SKIP_ACCESS_POLICY=true 时跳过。
     let policy: Vec<_> = user.access_policy.clone().map(|a| a.0).unwrap_or_default();
-    check_access_policy(user.id, &policy, ip, &user_agent).await?;
+    if let Err(e) = check_access_policy(user.id, &policy, ip, &user_agent).await {
+        tracing::warn!(user_id = user.id, error = %e, "access policy violation (allowed through, Java-compatible)");
+    }
 
     // 降级策略（与 oauth_parse_token 一致，补齐与密码登录 issue_token 的
     // 对齐，M1）：

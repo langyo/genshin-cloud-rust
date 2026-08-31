@@ -297,7 +297,9 @@ pub struct Claims {
     pub token_type: Option<String>,
 }
 
-pub static EXPIRED_APPEND_DURATION: chrono::Duration = chrono::Duration::days(15);
+/// Access token 有效期：Java `JwtAccessToken` 为 1800 秒（30 分钟）。
+/// 对齐该契约；会话续航依赖 refresh token（30 天 + 轮换吊销）。
+pub static EXPIRED_APPEND_DURATION: chrono::Duration = chrono::Duration::seconds(1800);
 
 /// Refresh token 有效期：与 refresh JWT exp（30 天）保持一致。
 /// Redis `jwt:refresh:` 键的 TTL 必须使用本常量，避免键先于 JWT 过期
