@@ -466,7 +466,7 @@ async fn area_and_item_doc_business_assertions() {
         auth.clone(),
         AreaAddRequest {
             name: "Third Area".into(),
-            code: None,
+            code: Some("A3".into()),
             content: None,
             icon_id: 0,
             icon_tag: None,
