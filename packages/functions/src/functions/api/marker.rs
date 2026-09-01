@@ -395,13 +395,14 @@ pub async fn do_tweak(
                     },
                     MarkerTweakConfigPropEnum::ItemList => {
                         for tweak in tweaks {
-                            tweak_item_list(db, *marker_id, tweak).await?;
+                            tweak_item_list(db, auth.info.id, *marker_id, tweak).await?;
                         }
                     },
                 }
             }
 
-            // 通过 ActiveModelBehavior 设置 updater 与 update_time；确保携带版本信息
+            // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+            am.updater_id = Set(Some(auth.info.id));
             marker_model::Entity::update_safety(am)?.exec(db).await?;
             touched_ids.push(*marker_id);
         }
@@ -480,6 +481,7 @@ fn parse_item_entries(item_list: &[Option<serde_json::Value>]) -> Vec<(i64, i32)
 /// TrimLeft / TrimRight（只保留列出的关联）。
 async fn tweak_item_list(
     db: &sea_orm::DatabaseConnection,
+    operator_id: i64,
     marker_id: i64,
     tweak: &_utils::models::marker::MarkerTweakConfig,
 ) -> Result<()> {
@@ -507,18 +509,22 @@ async fn tweak_item_list(
     match tweak.marker_tweak_config_type {
         MarkerTweakConfigTypeEnum::Replace => {
             // 软删现有全部关联，然后插入新列表
-            for (_item_id, link) in existing_map.drain() {
+            for (_item_id, mut link) in existing_map.drain() {
+                // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+                link.updater_id = Some(operator_id);
                 mil_model::Entity::delete_safety(link.into())?
                     .exec(db)
                     .await?;
             }
             for (item_id, count) in entries {
-                insert_item_link(db, marker_id, item_id, count).await?;
+                insert_item_link(db, operator_id, marker_id, item_id, count).await?;
             }
         },
         MarkerTweakConfigTypeEnum::RemoveLeft | MarkerTweakConfigTypeEnum::RemoveRight => {
             for (item_id, _count) in entries {
-                if let Some(link) = existing_map.remove(&item_id) {
+                if let Some(mut link) = existing_map.remove(&item_id) {
+                    // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+                    link.updater_id = Some(operator_id);
                     mil_model::Entity::delete_safety(link.into())?
                         .exec(db)
                         .await?;
@@ -530,7 +536,7 @@ async fn tweak_item_list(
         MarkerTweakConfigTypeEnum::Append | MarkerTweakConfigTypeEnum::Prepend => {
             for (item_id, count) in entries {
                 if !existing_map.contains_key(&item_id) {
-                    insert_item_link(db, marker_id, item_id, count).await?;
+                    insert_item_link(db, operator_id, marker_id, item_id, count).await?;
                 }
             }
         },
@@ -539,9 +545,10 @@ async fn tweak_item_list(
             let keep: HashSet<i64> = entries.iter().map(|(id, _)| *id).collect();
             for (item_id, link) in existing_map.iter() {
                 if !keep.contains(item_id) {
-                    mil_model::Entity::delete_safety(link.clone().into())?
-                        .exec(db)
-                        .await?;
+                    let mut lam: mil_model::ActiveModel = link.clone().into();
+                    // 审计字段：软删也是修改，设置 update 组
+                    lam.updater_id = Set(Some(operator_id));
+                    mil_model::Entity::delete_safety(lam)?.exec(db).await?;
                 }
             }
         },
@@ -563,9 +570,11 @@ async fn tweak_item_list(
                     }
                     let mut am: mil_model::ActiveModel = link.clone().into();
                     am.count = Set(count);
+                    // 审计字段：修改时设置 update 组
+                    am.updater_id = Set(Some(operator_id));
                     mil_model::Entity::update_safety(am)?.exec(db).await?;
                 } else {
-                    insert_item_link(db, marker_id, item_id, count).await?;
+                    insert_item_link(db, operator_id, marker_id, item_id, count).await?;
                 }
             }
         },
@@ -576,6 +585,7 @@ async fn tweak_item_list(
 
 async fn insert_item_link<C: sea_orm::ConnectionTrait>(
     db: &C,
+    operator_id: i64,
     marker_id: i64,
     item_id: i64,
     count: i32,
@@ -585,10 +595,11 @@ async fn insert_item_link<C: sea_orm::ConnectionTrait>(
         version: Set(0),
         // id 为 IDENTITY 列：NotSet 走自增，避免多条插入共用 id=0 撞主键
         id: sea_orm::ActiveValue::NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(operator_id)),
+        updater_id: Set(Some(operator_id)),
         del_flag: Set(false),
         item_id: Set(item_id),
         marker_id: Set(marker_id),
@@ -643,12 +654,15 @@ pub async fn do_add_single(
     let active = marker_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
 
+        // 保留字段：业务默认空字符串（仅兼容历史数据读取）
+        marker_stamp: Set(Some(String::new())),
         marker_title: Set(Some(payload.marker_title)),
         position: Set(payload.position),
         content: Set(payload.content.or(Some(String::new()))),
@@ -662,14 +676,13 @@ pub async fn do_add_single(
         extra: Set(payload
             .extra
             .map(|m| serde_json::to_value(m).unwrap_or(serde_json::json!({})))),
-        ..Default::default()
     };
 
     let res = active.insert(db).await?;
     // item_list 落库（parse_item_entries 支持裸数字 / {id|itemId, count}）；
     // Java createMarker 按 itemId 去重（重复提交取最后一次）
     for (item_id, count) in dedup_item_entries(parse_item_entries(&payload.item_list)) {
-        insert_item_link(db, res.id, item_id, count).await?;
+        insert_item_link(db, auth.info.id, res.id, item_id, count).await?;
     }
     super::binary_doc::invalidate_doc_cache().await;
     // 直接返回裸 id，前端期望 data 为 number
@@ -735,6 +748,8 @@ pub async fn do_update_single(
         am.video_path = Set(Some(video_path));
     }
 
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(auth.info.id));
     marker_model::Entity::update_safety(am)?.exec(db).await?;
 
     // item_list 全量替换（先删后插）：编辑表单始终携带完整 itemList，
@@ -745,13 +760,15 @@ pub async fn do_update_single(
         .filter(mil_model::Column::MarkerId.eq(payload.id))
         .all(&txn)
         .await?;
-    for link in existing {
+    for mut link in existing {
+        // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+        link.updater_id = Some(auth.info.id);
         mil_model::Entity::delete_safety(link.into())?
             .exec(&txn)
             .await?;
     }
     for (item_id, count) in dedup_item_entries(parse_item_entries(&payload.item_list)) {
-        insert_item_link(&txn, payload.id, item_id, count).await?;
+        insert_item_link(&txn, auth.info.id, payload.id, item_id, count).await?;
     }
     txn.commit().await?;
 
@@ -1009,6 +1026,8 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
     if let Some(m) = marker_model::Entity::find_safety_by_id(id).one(db).await? {
         let mut am: marker_model::ActiveModel = m.into();
         am.del_flag = Set(true);
+        // 审计字段：软删也是修改，设置 update 组
+        am.updater_id = Set(Some(auth.info.id));
         marker_model::Entity::delete_safety(am)?.exec(db).await?;
     }
     // 级联软删该 marker 的 item 关联
@@ -1016,7 +1035,9 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
         .filter(mil_model::Column::MarkerId.eq(id))
         .all(db)
         .await?;
-    for link in item_links {
+    for mut link in item_links {
+        // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+        link.updater_id = Some(auth.info.id);
         mil_model::Entity::delete_safety(link.into())?
             .exec(db)
             .await?;
@@ -1031,7 +1052,9 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
         )
         .all(db)
         .await?;
-    for linkage in linkages {
+    for mut linkage in linkages {
+        // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+        linkage.updater_id = Some(auth.info.id);
         linkage_model::Entity::delete_safety(linkage.into())?
             .exec(db)
             .await?;
