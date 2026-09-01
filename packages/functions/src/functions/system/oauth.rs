@@ -388,16 +388,18 @@ const LOGIN_RATE_LIMIT_WINDOW_SECS: u64 = 60;
 static LOGIN_FAILURES: Lazy<std::sync::Mutex<std::collections::HashMap<String, (u32, i64)>>> =
     Lazy::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
-/// 清理早于当前窗口的限流条目。条目只对当前窗口计数（跨窗口在下次
-/// 访问时本就会被重置），直接移除过期条目可防止 `LOGIN_FAILURES`
-/// 按唯一 IP 无限累积。
-fn sweep_stale_login_failures(
-    map: &mut std::collections::HashMap<String, (u32, i64)>,
-    window: i64,
-) {
-    map.retain(|_, (_, entry_window)| *entry_window >= window);
+/// 清理窗口已过期的限流条目（防止 `LOGIN_FAILURES` 按唯一 IP 无限累积）。
+fn sweep_stale_login_failures(map: &mut std::collections::HashMap<String, (u32, i64)>, now: i64) {
+    map.retain(|_, (_, window_start)| {
+        now.saturating_sub(*window_start) < LOGIN_RATE_LIMIT_WINDOW_SECS as i64
+    });
 }
 
+/// 进程内兜底的滚动窗口语义：自**首次失败**起 60 秒内持续计数，与 Redis
+/// 侧 `SET NX EX 60` + INCR 的滚动 TTL 对齐。此前的「时钟分钟桶」实现
+///（`now / 60` 分桶）会在分钟边界把计数清零——5 次失败跨过整分后第 6 次
+/// 放行（CI 无 Redis 走本路径时为确定性抖动源）。
+///
 /// Redis 侧失败计数。返回 `None` 表示 Redis 不可用/命令失败，由调用方降级
 /// 到进程内 HashMap。
 ///
@@ -461,13 +463,12 @@ async fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
 /// 进程内 HashMap 兜底实现（Redis 不可用时的降级路径）。
 fn check_login_rate_limit_local(ip: SocketAddr) -> Result<()> {
     let now = chrono::Utc::now().timestamp();
-    let window = now / LOGIN_RATE_LIMIT_WINDOW_SECS as i64;
     let mut map = LOGIN_FAILURES.lock().unwrap();
-    sweep_stale_login_failures(&mut map, window);
+    sweep_stale_login_failures(&mut map, now);
     // 同 login_failure_count_redis：key 仅取 IP 不含临时端口
-    let entry = map.entry(ip.ip().to_string()).or_insert((0, window));
-    if entry.1 != window {
-        *entry = (0, window);
+    let entry = map.entry(ip.ip().to_string()).or_insert((0, now));
+    if now.saturating_sub(entry.1) >= LOGIN_RATE_LIMIT_WINDOW_SECS as i64 {
+        *entry = (0, now);
     }
     if entry.0 >= LOGIN_RATE_LIMIT_PER_MINUTE {
         return Err(anyhow!(
@@ -488,13 +489,12 @@ async fn record_login_failure(ip: SocketAddr) {
 /// 进程内 HashMap 兜底实现（Redis 不可用时的降级路径）。
 fn record_login_failure_local(ip: SocketAddr) {
     let now = chrono::Utc::now().timestamp();
-    let window = now / LOGIN_RATE_LIMIT_WINDOW_SECS as i64;
     let mut map = LOGIN_FAILURES.lock().unwrap();
-    sweep_stale_login_failures(&mut map, window);
+    sweep_stale_login_failures(&mut map, now);
     // 同 check_login_rate_limit_local：key 仅取 IP 不含临时端口
-    let entry = map.entry(ip.ip().to_string()).or_insert((0, window));
-    if entry.1 != window {
-        *entry = (0, window);
+    let entry = map.entry(ip.ip().to_string()).or_insert((0, now));
+    if now.saturating_sub(entry.1) >= LOGIN_RATE_LIMIT_WINDOW_SECS as i64 {
+        *entry = (0, now);
     }
     entry.0 += 1;
 }
