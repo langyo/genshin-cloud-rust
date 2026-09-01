@@ -674,10 +674,9 @@ pub async fn oauth_refresh(
         .ok_or_else(|| anyhow::anyhow!("User not found"))?;
     let vo: SysUserVO = user.clone().into();
 
-    // 与登录一致地校验 access_policy（IP / 设备绑定策略）：策略违规直接拒绝
-    // 且**不消耗** refresh token —— 校验在下方 GETDEL 轮换之前，合法机主在原
-    // 环境仍可刷新，被偷的 refresh 在异地/异设备上无法续命（否则绑定策略只
-    // 挡登录、旧 refresh 可在 30 天窗口内无限轮换，策略形同虚设）。
+    // 与登录一致地校验 access_policy（IP / 设备绑定策略）：对齐 Java
+    // `checkDeviceAccess`（token enhancer 对所有签发路径生效）—— 策略违规
+    // 只影响审计日志与提示信息，登录/刷新仍然成功（「警告放行」）。
     // 无策略用户（空 policy）天然放行；SKIP_ACCESS_POLICY=true 时跳过。
     let policy: Vec<_> = user.access_policy.clone().map(|a| a.0).unwrap_or_default();
     if let Err(e) = check_access_policy(user.id, &policy, ip, &user_agent).await {
