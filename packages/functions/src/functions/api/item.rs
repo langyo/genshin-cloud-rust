@@ -127,7 +127,7 @@ pub async fn do_update(
             return Err(anyhow!("Item not found"));
         }
         for id in target_ids {
-            update_one(db, id, &p).await?;
+            update_one(db, auth.info.id, id, &p).await?;
         }
     }
     super::binary_doc::invalidate_item_doc_cache().await;
@@ -140,10 +140,17 @@ pub async fn do_update(
 }
 
 /// 更新单个物品及其类型关联（`typeIdList` 全量替换）。
-async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateData) -> Result<()> {
+async fn update_one(
+    db: &sea_orm::DatabaseConnection,
+    operator_id: i64,
+    id: i64,
+    p: &ItemUpdateData,
+) -> Result<()> {
     let item = item_model::Entity::find_safety_by_id(id).one(db).await?;
     let item = item.ok_or(anyhow!("Item not found"))?;
     let mut am: item_model::ActiveModel = item.into();
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(operator_id));
 
     am.icon_id = Set(resolve_icon_id(p.icon_id, p.icon_tag.as_deref()).await?);
 
@@ -177,6 +184,8 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
     for link in old_links {
         let mut lam: link_model::ActiveModel = link.into();
         lam.del_flag = Set(true);
+        // 审计字段：软删也是修改，设置 update 组
+        lam.updater_id = Set(Some(operator_id));
         link_model::Entity::update_safety(lam)?.exec(&txn).await?;
     }
     for t in &p.type_id_list {
@@ -184,10 +193,11 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
         let active = link_model::ActiveModel {
             version: Set(0),
             id: NotSet,
+            // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
-            update_time: Set(None),
-            creator_id: Set(None),
-            updater_id: Set(None),
+            update_time: Set(Some(now)),
+            creator_id: Set(Some(operator_id)),
+            updater_id: Set(Some(operator_id)),
             del_flag: Set(false),
 
             type_id: Set(*t),
@@ -330,10 +340,11 @@ pub async fn do_join_type(
         let active = link_model::ActiveModel {
             version: Set(0),
             id: NotSet,
+            // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
-            update_time: Set(None),
-            creator_id: Set(None),
-            updater_id: Set(None),
+            update_time: Set(Some(now)),
+            creator_id: Set(Some(auth.info.id)),
+            updater_id: Set(Some(auth.info.id)),
             del_flag: Set(false),
 
             type_id: Set(type_id),
@@ -402,6 +413,8 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
 
     let mut am: item_model::ActiveModel = item.into();
     am.del_flag = Set(true);
+    // 审计字段：软删也是修改，设置 update 组
+    am.updater_id = Set(Some(auth.info.id));
     item_model::Entity::delete_safety(am)?.exec(db).await?;
 
     // 清理 item_type_link 关联（软删）
@@ -468,12 +481,14 @@ pub async fn do_copy_to_area(
             // 复制为新行：IDENTITY 列走自增（显式 Set(0) 会在第二次复制时撞主键）
             am.id = NotSet;
             am.area_id = Set(area_id);
-            am.create_time = Set(chrono::Utc::now().naive_utc());
-            am.update_time = Set(None);
-            // 新行乐观锁从 0 起步，创建/更新人归 None（与 do_add 语义一致）
+            // 审计字段：新增时 create/update 两组全部设置（复制人即操作者）
+            let copy_now = chrono::Utc::now().naive_utc();
+            am.create_time = Set(copy_now);
+            am.update_time = Set(Some(copy_now));
+            // 新行乐观锁从 0 起步
             am.version = Set(0);
-            am.creator_id = Set(None);
-            am.updater_id = Set(None);
+            am.creator_id = Set(Some(auth.info.id));
+            am.updater_id = Set(Some(auth.info.id));
             let res = am.insert(&DB_CONN.wait().pg_conn).await?;
             let new_id = res.id;
             // 复制类型关联
@@ -485,10 +500,11 @@ pub async fn do_copy_to_area(
                 let active = link_model::ActiveModel {
                     version: Set(0),
                     id: NotSet,
+                    // 审计字段：新增时 create/update 两组全部设置
                     create_time: Set(chrono::Utc::now().naive_utc()),
-                    update_time: Set(None),
-                    creator_id: Set(None),
-                    updater_id: Set(None),
+                    update_time: Set(Some(chrono::Utc::now().naive_utc())),
+                    creator_id: Set(Some(auth.info.id)),
+                    updater_id: Set(Some(auth.info.id)),
                     del_flag: Set(false),
 
                     type_id: Set(l.type_id),
@@ -517,10 +533,11 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
     let active = item_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
 
         name: Set(payload.name),
@@ -563,10 +580,11 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
             let active = link_model::ActiveModel {
                 version: Set(0),
                 id: NotSet,
+                // 审计字段：新增时 create/update 两组全部设置
                 create_time: Set(now),
-                update_time: Set(None),
-                creator_id: Set(None),
-                updater_id: Set(None),
+                update_time: Set(Some(now)),
+                creator_id: Set(Some(auth.info.id)),
+                updater_id: Set(Some(auth.info.id)),
                 del_flag: Set(false),
 
                 type_id: Set(*t),

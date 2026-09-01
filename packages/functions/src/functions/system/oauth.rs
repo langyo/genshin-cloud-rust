@@ -123,6 +123,8 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
         // 已有登记：仅刷新 IP / 最近登录时间。status（封禁状态）随
         // `dev.into()` 原样保留，不因成功登录被静默重置为 0。
         let mut am: models::system::sys_user_device::ActiveModel = dev.into();
+        // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+        am.updater_id = Set(Some(user_id));
         am.ipv4 = Set(Some(ip.ip().to_string()));
         am.last_login_time = Set(Some(now));
         models::system::sys_user_device::Entity::update_safety(am)?
@@ -135,10 +137,11 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
     let am = models::system::sys_user_device::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(user_id)),
+        updater_id: Set(Some(user_id)),
         del_flag: Set(false),
         user_id: Set(Some(user_id)),
         device_id: Set(user_agent.to_string()),
@@ -508,10 +511,12 @@ async fn record_login_log(
     models::system::sys_action_log::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置；操作者即登录主体
+        //（未知用户名的失败登录记 0）
         create_time: Set(chrono::Utc::now().naive_utc()),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(chrono::Utc::now().naive_utc())),
+        creator_id: Set(Some(user_id.unwrap_or(0))),
+        updater_id: Set(Some(user_id.unwrap_or(0))),
         del_flag: Set(false),
         user_id: Set(user_id),
         ipv4: Set(Some(ip.ip().to_string())),

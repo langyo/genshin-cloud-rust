@@ -171,7 +171,8 @@ struct PendingLink {
 }
 
 /// 建立关联（Java `MarkerLinkageService.linkMarker` + `patchLinkSearchMap`）：
-/// - 存储方向规范化 from<to，`link_reverse` 记录逻辑反向；
+/// - 存储方向规范化 from<to，`link_reverse` 记录逻辑反向；入参携带的
+///   `linkReverse` 一律忽略，方向语义只看 fromId -> toId；
 /// - 与提交端点相关的**全部**既有关联（含软删）进入置换集：未再次提交的
 ///   行被软删（缺席清理），再次提交的行复用/复活并划入新组；
 /// - 同一无序对天然去重（同对只保留一行）。
@@ -253,7 +254,13 @@ pub async fn do_link(
             (p.from_id, p.to_id, false)
         };
         let key = pair_key(p.from_id, p.to_id);
-        let path_json = p.path.as_ref().and_then(|v| serde_json::to_value(v).ok());
+        // 业务默认值：path = []（客户端缺省路径时落空数组而非 NULL）
+        let path_json = Some(
+            p.path
+                .as_ref()
+                .and_then(|v| serde_json::to_value(v).ok())
+                .unwrap_or_else(|| serde_json::json!([])),
+        );
         if let Some(&i) = index.get(&key) {
             pending[i].del = false;
             pending[i].from_id = from_id;
@@ -281,6 +288,8 @@ pub async fn do_link(
             if let Some(m) = pl.existing {
                 let mut am: linkage_model::ActiveModel = m.into();
                 am.del_flag = Set(true);
+                // 审计字段：软删也是修改，设置 update 组
+                am.updater_id = Set(Some(auth.info.id));
                 linkage_model::Entity::update_safety(am)?.exec(db).await?;
             }
             continue;
@@ -288,6 +297,8 @@ pub async fn do_link(
         let action = pl.link_action.unwrap_or(MarkerLinkageLinkAction::Trigger);
         if let Some(m) = pl.existing {
             let mut am: linkage_model::ActiveModel = m.into();
+            // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+            am.updater_id = Set(Some(auth.info.id));
             am.group_id = Set(group_id.clone());
             am.from_id = Set(pl.from_id);
             am.to_id = Set(pl.to_id);
@@ -301,10 +312,11 @@ pub async fn do_link(
             let active = linkage_model::ActiveModel {
                 version: Set(0),
                 id: NotSet,
+                // 审计字段：新增时 create/update 两组全部设置
                 create_time: Set(now),
-                update_time: Set(None),
-                creator_id: Set(None),
-                updater_id: Set(None),
+                update_time: Set(Some(now)),
+                creator_id: Set(Some(auth.info.id)),
+                updater_id: Set(Some(auth.info.id)),
                 del_flag: Set(false),
                 group_id: Set(group_id.clone()),
                 from_id: Set(pl.from_id),
@@ -312,7 +324,8 @@ pub async fn do_link(
                 link_action: Set(action),
                 link_reverse: Set(pl.link_reverse),
                 path: Set(pl.path),
-                extra: Set(None),
+                // 业务默认值：extra = {}
+                extra: Set(Some(serde_json::json!({}))),
             };
             active.insert(db).await?;
         }
@@ -718,6 +731,8 @@ pub async fn do_delete(
                 collect_affected(&item);
                 let mut am: linkage_model::ActiveModel = item.into();
                 am.del_flag = Set(true);
+                // 审计字段：软删也是修改，设置 update 组
+                am.updater_id = Set(Some(auth.info.id));
                 linkage_model::Entity::delete_safety(am)?.exec(db).await?;
             }
         }
@@ -733,6 +748,8 @@ pub async fn do_delete(
                 collect_affected(&it);
                 let mut am: linkage_model::ActiveModel = it.into();
                 am.del_flag = Set(true);
+                // 审计字段：软删也是修改，设置 update 组
+                am.updater_id = Set(Some(auth.info.id));
                 linkage_model::Entity::delete_safety(am)?.exec(db).await?;
             }
         }

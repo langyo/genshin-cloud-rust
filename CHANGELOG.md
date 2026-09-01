@@ -7,7 +7,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Domain-default & audit-field iteration (Java `SysUserArchiveService` /
+  meta-object-handler alignment):
+  - Audit fields (`creator_id`/`updater_id`/`create_time`/`update_time`):
+    every business insert now sets all four; every entity update (including
+    soft deletes and cascade link rebuilds) sets the update group. Bulk
+    maintenance updates (`update_many` cascades) also stamp `update_time` /
+    `updater_id` where the operator is known.
+  - User archive storage model redesigned to the Java slot-row design: one
+    row per `userId + slotIndex`; `data` is a newest-first history array
+    (default `[]`) of `{time: <ms number>, archive}` entries capped at 5;
+    saves insert at the front and dedupe against the newest entry (RBoolean
+    `false`); dirty data (duplicate slot rows) resolves by latest
+    `updateTime` then max id. `GET /archive/last` & `DELETE /archive/restore`
+    now return the Java `SysArchiveVo {time, archive, historyIndex}`;
+    `GET /archive/history` returns the single `SysArchiveSlotVo` (frontend
+    `RSysArchiveSlotVo` contract); rename/delete slots return RBoolean.
+    Legacy shapes (string `time` entries, old bare-string `data`) still read.
+  - `marker.markerStamp` is a reserved field defaulting to an empty string on
+    create (business default; no schema change).
+  - `marker_linkage.path` defaults to `[]` and `extra` to `{}` on writes
+    (business defaults; no schema change). Incoming `linkReverse` is always
+    ignored — direction is normalized from<to in storage and flipped back on
+    reads, so the frontend `fromId -> toId` semantics always hold.
+
 ### Fixed
+
+- Area add/update guards: `name` and `code` must be non-empty ("地区名称不能为空" /
+  "地区代码不能为空"); a missing `content` defaults to an empty string.
+- OAuth login/refresh policy checks stay warn-through (Java
+  `checkDeviceAccess` never rejects) — the stale DB tests that expected
+  rejection were aligned instead.
+
+### Dependencies
+
+- Re-integrated the closed dependabot batch in one sweep: cargo `flate2`
+  1.1.10, `log` 0.4.34, `sea-orm` 2.0.2, `uuid` 1.26.0, `async-trait` 0.1.92;
+  actions `setup-python v7`, `docker/metadata-action v6`, `docker/login-action`
+  v4, `docker/build-push-action v7`.
+
+### Fixed (previous sweep)
 
 - Java-alignment sweep (second pass, from the full Java-vs-Rust audit):
   - `POST /api/marker/get/id` & `get/list_byinfo`: the three filter conditions

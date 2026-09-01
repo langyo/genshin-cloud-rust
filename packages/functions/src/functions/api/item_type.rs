@@ -72,6 +72,8 @@ pub async fn do_update(
     }
 
     let mut am: item_type_model::ActiveModel = item.into();
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(auth.info.id));
 
     // icon_tag -> icon_id
     am.icon_id = Set(resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?);
@@ -146,6 +148,8 @@ pub async fn do_move_to_target(
             old_parents.push(item.parent_id);
             let mut am: item_type_model::ActiveModel = item.into();
             am.parent_id = Set(target_type_id);
+            // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+            am.updater_id = Set(Some(auth.info.id));
             item_type_model::Entity::update_safety(am)?.exec(db).await?;
         }
     }
@@ -361,9 +365,11 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
     // 软删自身与所有后代
     for tid in &to_delete {
         if let Some(model) = all.iter().find(|t| t.id == *tid) {
-            item_type_model::Entity::delete_safety(model.clone().into())?
-                .exec(db)
-                .await?;
+            let mut am: item_type_model::ActiveModel = model.clone().into();
+            am.del_flag = Set(true);
+            // 审计字段：软删也是修改，设置 update 组
+            am.updater_id = Set(Some(auth.info.id));
+            item_type_model::Entity::delete_safety(am)?.exec(db).await?;
         }
     }
 
@@ -409,10 +415,11 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
     let active = item_type_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
 
         icon_id: Set(icon_id),

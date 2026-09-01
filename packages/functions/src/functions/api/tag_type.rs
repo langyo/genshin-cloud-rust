@@ -39,10 +39,11 @@ pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<Commo
     let am = tag_type_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
         name: Set(payload.name),
         parent_id: Set(payload.parent_id),
@@ -195,6 +196,8 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
             {
                 let mut am: ttl_model::ActiveModel = l.into();
                 am.del_flag = Set(true);
+                // 审计字段：软删也是修改，设置 update 组
+                am.updater_id = Set(Some(auth.info.id));
                 ttl_model::Entity::update_safety(am)?.exec(db).await?;
             }
             // 类型本体
@@ -205,6 +208,8 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
             {
                 let mut am: tag_type_model::ActiveModel = tt.into();
                 am.del_flag = Set(true);
+                // 审计字段：软删也是修改，设置 update 组
+                am.updater_id = Set(Some(auth.info.id));
                 tag_type_model::Entity::delete_safety(am)?.exec(db).await?;
             }
         }
