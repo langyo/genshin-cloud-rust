@@ -7,6 +7,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Java-alignment sweep (second pass, from the full Java-vs-Rust audit):
+  - `POST /api/marker/get/id` & `get/list_byinfo`: the three filter conditions
+    (area/item/type) are now mutually exclusive ("条件冲突"), filtering happens
+    on `item.hidden_flag` like Java's `searchMarkerId`, and an empty request
+    returns an empty list instead of falling back to every visible marker id.
+  - `PUT /system/user/register` now always creates a `MAP_USER` (the request's
+    `roleId` is ignored), closing a Manager→Admin privilege-escalation path
+    that Java never allowed.
+  - Marker write path: `update`/`delete` return `data:true` (Java `R<Boolean>`);
+    optional `version` in the update body enables the `@Version` optimistic
+    lock ("该点位已更新，请重新提交"); `extra` now merges Java-style (null keys
+    delete, others replace); create keeps the request's `markerCreatorId` and
+    de-duplicates `itemList` by itemId.
+  - Marker linkage domain ported to the Java algorithms: writes normalize
+    direction (from<to + `linkReverse`), de-duplicate by unordered pair, soft
+    delete absent relations among affected endpoints and revive re-submitted
+    ones; reads restore logical direction and patch path coordinates
+    (x1/y1/x2/y2); `marker_link_doc/all_graph_bin` now emits the Java
+    `GraphVo{relations,relRefs,pathRefs}` blob instead of a plain adjacency
+    map (client-breaking fix for official frontends).
+  - Type trees (`icon_type`, `tag_type`, `item_type`): delete recursively
+    removes the subtree and its link table; update rejects id==parentId and
+    recomputes `isFinal` for the node and old/new parents; move rejects a
+    target inside the moved set; an empty/absent `typeIdList` in the list
+    endpoints now queries the root level instead of dumping the whole tree;
+    paged list responses gained the `size` field (Java `PageListVo`).
+  - Item domain: delete guards common items ("不允许删除公共物品"), cleans
+    `marker_item_link`, invalidates the marker cache too and returns
+    `data:false` for missing ids; `add`/`join` validate referenced
+    type/item ids ("类型ID错误"/"物品ID存在错误"); update returns `data:true`.
+  - Tag/icon cleanups: deleting a tag removes its `tag_type_link` rows;
+    `updateType` validates type ids; deleting an icon removes its
+    `icon_type_link` rows and returns a boolean.
+  - Auth gates aligned with the Java gateway matrix: `/system/user/info/userList`
+    and `/api/item_common/get/list` require MAP_MANAGER (was Admin/any-user),
+    `/api/history/get/list` needs only a valid login (was Manager),
+    `/api/score/data` is Admin-only (was any logged-in user).
+  - Access tokens now expire after 1800s (Java `JwtAccessToken`); sessions
+    continue via the existing 30-day rotating refresh token.
+  - Login device/IP policy violations warn and allow the login (Java
+    `checkDeviceAccess` semantics) instead of rejecting it.
+- Docs: the README's "every /api/* route is aligned one by one" claim now
+  notes the intentionally-absent `route`/`punctuate`/`punctuate_audit`
+  domains, the stale `/route` rows were dropped from the api-reference, and
+  the commented-out route module carries the deprecation rationale.
+
 ### Added
 
 - `APP_ENV` env var: the runtime environment identifier emitted as the `env`

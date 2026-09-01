@@ -173,19 +173,30 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Ic
 }
 
 // 删除（软删除）
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let item = icon_model::Entity::find_safety_by_id(id)
+    let Some(item) = icon_model::Entity::find_safety_by_id(id)
         .one(&DB_CONN.wait().pg_conn)
-        .await?;
-    let item = item.ok_or(anyhow!("Icon not found"))?;
+        .await?
+    else {
+        return Ok(CommonResponse::new(Ok(false)));
+    };
     let mut am: icon_model::ActiveModel = item.into();
     am.del_flag = Set(true);
     icon_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
+    // Java deleteIcon：同步删除 icon_type_link，避免悬空关联
+    _database::models::icon::icon_type_link::Entity::update_many()
+        .col_expr(
+            _database::models::icon::icon_type_link::Column::DelFlag,
+            sea_orm::sea_query::Expr::value(true),
+        )
+        .filter(_database::models::icon::icon_type_link::Column::IconId.eq(id))
+        .exec(&DB_CONN.wait().pg_conn)
+        .await?;
     super::binary_doc::invalidate_doc_cache().await;
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 // 更新图标

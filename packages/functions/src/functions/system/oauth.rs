@@ -280,9 +280,13 @@ async fn oauth_password_login_inner(
         return Err(anyhow!("Invalid username or password"));
     }
 
-    // 身份验证通过后，按用户的 access_policy 校验登录环境
+    // 身份验证通过后，按用户的 access_policy 校验登录环境。
+    // Java `AuthorizationServerConfiguration.checkDeviceAccess`：策略不命中只
+    // 影响提示信息与审计日志，登录仍然成功 —— 对齐为「警告放行」而非拒绝。
     let policy: Vec<_> = item.access_policy.clone().map(|a| a.0).unwrap_or_default();
-    check_access_policy(item.id, &policy, ip, user_agent).await?;
+    if let Err(e) = check_access_policy(item.id, &policy, ip, user_agent).await {
+        tracing::warn!(user_id = item.id, error = %e, "access policy violation (allowed through, Java-compatible)");
+    }
 
     issue_token(&item).await
 }
@@ -670,13 +674,14 @@ pub async fn oauth_refresh(
         .ok_or_else(|| anyhow::anyhow!("User not found"))?;
     let vo: SysUserVO = user.clone().into();
 
-    // 与登录一致地校验 access_policy（IP / 设备绑定策略）：策略违规直接拒绝
-    // 且**不消耗** refresh token —— 校验在下方 GETDEL 轮换之前，合法机主在原
-    // 环境仍可刷新，被偷的 refresh 在异地/异设备上无法续命（否则绑定策略只
-    // 挡登录、旧 refresh 可在 30 天窗口内无限轮换，策略形同虚设）。
+    // 与登录一致地校验 access_policy（IP / 设备绑定策略）：对齐 Java
+    // `checkDeviceAccess`（token enhancer 对所有签发路径生效）—— 策略违规
+    // 只影响审计日志与提示信息，登录/刷新仍然成功（「警告放行」）。
     // 无策略用户（空 policy）天然放行；SKIP_ACCESS_POLICY=true 时跳过。
     let policy: Vec<_> = user.access_policy.clone().map(|a| a.0).unwrap_or_default();
-    check_access_policy(user.id, &policy, ip, &user_agent).await?;
+    if let Err(e) = check_access_policy(user.id, &policy, ip, &user_agent).await {
+        tracing::warn!(user_id = user.id, error = %e, "access policy violation (allowed through, Java-compatible)");
+    }
 
     // 降级策略（与 oauth_parse_token 一致，补齐与密码登录 issue_token 的
     // 对齐，M1）：
