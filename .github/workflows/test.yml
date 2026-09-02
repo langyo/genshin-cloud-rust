@@ -105,9 +105,9 @@ jobs:
 
   # Commit-message linting lives in commit-msg.yml (standalone workflow).
   # It used to be inlined here as a job with the required-check context name
-  # "Commit Message Lint / Lint commit messages"; commit-msg.yml reports the
-  # exact same context name (workflow name + job name), so branch protection
-  # stays green with only the standalone workflow.
+  # "Commit Message Lint / Lint commit messages"; commit-msg.yml's job carries
+  # that exact name (GitHub registers check runs under the job name alone),
+  # so branch protection stays green with only the standalone workflow.
 
   secrets-scan:
     name: Secrets Scan
