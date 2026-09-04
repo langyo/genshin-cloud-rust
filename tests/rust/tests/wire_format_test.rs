@@ -18,7 +18,7 @@
 //! - item.iconStyleType: numeric 0-3 from the frontend.
 //! - sys_user_archive.data: newest-first history array (numeric ms `time`),
 //!   legacy string-time entries and old bare-string writes all parse.
-//! - sys_user.password: `{bcrypt}`-prefixed storage (68 chars).
+//! - sys_user password storage: `{bcrypt}` prefix (68 chars total).
 //! - area add request: the frontend form carries no isFinal (server-computed).
 
 use _database::models::common::notice::ChannelWrapper;
@@ -332,7 +332,8 @@ fn marker_linkage_link_action_uppercase() {
 
 #[test]
 fn sys_user_password_prefix() {
-    // Real DB shape (audit): password = `{bcrypt}$2a$...` (68 chars total).
+    // Real DB shape (audit): stored values start with the `{bcrypt}` prefix,
+    // 68 chars total (bcrypt hash body included).
     let stored = bcrypt::generate_storage_password("pw123").expect("generate storage password");
     assert!(
         stored.starts_with("{bcrypt}"),

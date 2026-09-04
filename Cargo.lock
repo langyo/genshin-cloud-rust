@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "_database"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "_utils",
  "anyhow",
@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "_functions"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "_database",
  "_utils",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "_router"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "_database",
  "_functions",
@@ -91,7 +91,7 @@ dependencies = [
 
 [[package]]
 name = "_utils"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1813,7 +1813,7 @@ dependencies = [
 
 [[package]]
 name = "genshin-cloud-tests"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "_database",
  "_functions",
