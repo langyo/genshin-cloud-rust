@@ -138,7 +138,7 @@ pub async fn do_update(
 
         let now = Utc::now().naive_utc();
         let am = inv_model::ActiveModel {
-            version: Set(0),
+            version: Set(1),
             id: NotSet,
             // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
@@ -160,7 +160,7 @@ pub async fn do_update(
     let code = &uuid::Uuid::new_v4().simple().to_string()[..12];
     let now = Utc::now().naive_utc();
     let am = inv_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
@@ -271,7 +271,7 @@ pub async fn do_consume(
     }
 
     let user_am = sys_user_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
         // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
@@ -309,7 +309,7 @@ pub async fn do_consume(
 }
 
 /// Delete an invitation by id (soft delete).
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     let db = &DB_CONN.wait().pg_conn;
     let inv = inv_model::Entity::find_safety_by_id(id)
         .one(db)
@@ -320,5 +320,5 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
     // 审计字段：软删也是修改，设置 update 组
     am.updater_id = Set(Some(_auth.info.id));
     inv_model::Entity::delete_safety(am)?.exec(db).await?;
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
