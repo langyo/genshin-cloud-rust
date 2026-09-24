@@ -70,11 +70,6 @@ async fn db() -> Option<&'static sea_orm::DatabaseConnection> {
     DB_CONN.get().map(|m| &m.pg_conn)
 }
 
-/// Serialize the tests that DROP/CREATE the shared FK-free tables: libtest
-/// runs test fns in parallel by default, and two concurrent recreations of
-/// the same tables race (one test's DROP meets the other's seed inserts).
-static TABLE_RECREATE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
 /// Build a CREATE TABLE statement for an entity with all FOREIGN KEY
 /// constraints stripped, so the table can be created in isolation without its
 /// dependency tables existing.
@@ -290,8 +285,6 @@ async fn area_and_item_doc_business_assertions() {
     let Some(db) = db().await else {
         return;
     };
-    let _tables = TABLE_RECREATE_LOCK.lock().await;
-
     // ── Setup: FK-free tables for area + item ────────────────────────────────
     let ddls = [
         ddl_without_foreign_keys(sys_user_model::Entity),
@@ -1774,80 +1767,13 @@ async fn area_and_item_doc_business_assertions() {
             .ok()
             .unwrap_or(0);
     }
-}
 
-// ────────────────────────────────────────────────────────────────────────────
-// marker_doc::list_diff_snapshot —— 高频差异快照端点的 DB 断言
-// ────────────────────────────────────────────────────────────────────────────
-
-/// Seed one snapshot marker row with an explicit id (wire bytes depend on it).
-async fn seed_snapshot_marker(
-    db: &sea_orm::DatabaseConnection,
-    now: chrono::NaiveDateTime,
-    id: i64,
-    version: i64,
-    hidden_flag: HiddenFlag,
-) -> anyhow::Result<()> {
-    let am = marker_model::ActiveModel {
-        id: Set(id),
-        version: Set(version),
-        create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
-        del_flag: Set(false),
-        marker_stamp: Set(None),
-        marker_title: Set(None),
-        position: Set("1.0,2.0".into()),
-        content: Set(None),
-        picture: Set(None),
-        marker_creator_id: Set(1),
-        picture_creator_id: Set(None),
-        video_path: Set(None),
-        refresh_time: Set(0),
-        hidden_flag: Set(hidden_flag),
-        extra: Set(None),
-    };
-    marker_model::Entity::insert(am).exec(db).await?;
-    Ok(())
-}
-
-/// Seed one marker_item_link row (optionally soft-deleted).
-async fn seed_snapshot_mil(
-    db: &sea_orm::DatabaseConnection,
-    now: chrono::NaiveDateTime,
-    item_id: i64,
-    marker_id: i64,
-    del_flag: bool,
-) -> anyhow::Result<()> {
-    let am = mil_model::ActiveModel {
-        id: NotSet,
-        version: Set(1),
-        create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
-        del_flag: Set(del_flag),
-        item_id: Set(item_id),
-        marker_id: Set(marker_id),
-        count: Set(1),
-    };
-    mil_model::Entity::insert(am).exec(db).await?;
-    Ok(())
-}
-
-/// GET /api/marker_doc/list_diff_snapshot 的 DB 断言：三表 JOIN（marker ⋈
-/// marker_item_link ⋈ item）+ 连线组扫描必须与旧的分块 IN 链语义一致 ——
-/// 物品/点位双侧 hidden_flag 过滤、软删链路排除、一点多链去重、
-/// ORDER BY id 稳定输出、linkage_id 首组回填（首插即定），以及
-/// get_result_cached 缓存命中与失效重建。
-#[tokio::test]
-async fn marker_doc_diff_snapshot_filters_and_encodes_wire_bytes() {
-    let Some(db) = db().await else {
-        return;
-    };
-    let _tables = TABLE_RECREATE_LOCK.lock().await;
-    let now = chrono::Utc::now().naive_utc();
+    // ── marker_doc::list_diff_snapshot：高频差异快照端点 ─────────────────────
+    //
+    // 三表 JOIN（marker ⋈ marker_item_link ⋈ item）+ 连线组扫描必须与旧的
+    // 分块 IN 链语义一致 —— 物品/点位双侧 hidden_flag 过滤、软删链路排除、
+    // 一点多链去重、ORDER BY id 稳定输出、linkage_id 首组回填（首插即定），
+    // 以及 get_result_cached 缓存命中与失效重建。
 
     recreate_tables_fklless(
         db,
@@ -2025,4 +1951,64 @@ async fn marker_doc_diff_snapshot_filters_and_encodes_wire_bytes() {
         0x0a, 0x04, 0x08, 0x02, 0x10, 0x06, // m6 {v:2, id:6}
     ]);
     assert_eq!(&*rebuilt, expected_rebuilt.as_slice(), "rebuilt bytes");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// marker_doc::list_diff_snapshot —— 高频差异快照端点的 DB 断言
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Seed one snapshot marker row with an explicit id (wire bytes depend on it).
+async fn seed_snapshot_marker(
+    db: &sea_orm::DatabaseConnection,
+    now: chrono::NaiveDateTime,
+    id: i64,
+    version: i64,
+    hidden_flag: HiddenFlag,
+) -> anyhow::Result<()> {
+    let am = marker_model::ActiveModel {
+        id: Set(id),
+        version: Set(version),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        marker_stamp: Set(None),
+        marker_title: Set(None),
+        position: Set("1.0,2.0".into()),
+        content: Set(None),
+        picture: Set(None),
+        marker_creator_id: Set(1),
+        picture_creator_id: Set(None),
+        video_path: Set(None),
+        refresh_time: Set(0),
+        hidden_flag: Set(hidden_flag),
+        extra: Set(None),
+    };
+    marker_model::Entity::insert(am).exec(db).await?;
+    Ok(())
+}
+
+/// Seed one marker_item_link row (optionally soft-deleted).
+async fn seed_snapshot_mil(
+    db: &sea_orm::DatabaseConnection,
+    now: chrono::NaiveDateTime,
+    item_id: i64,
+    marker_id: i64,
+    del_flag: bool,
+) -> anyhow::Result<()> {
+    let am = mil_model::ActiveModel {
+        id: NotSet,
+        version: Set(1),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(del_flag),
+        item_id: Set(item_id),
+        marker_id: Set(marker_id),
+        count: Set(1),
+    };
+    mil_model::Entity::insert(am).exec(db).await?;
+    Ok(())
 }

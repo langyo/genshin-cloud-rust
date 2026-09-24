@@ -5,6 +5,12 @@ name = "_router"
 publish = false
 version.workspace = true
 
+# Keep `cargo bench --workspace` on the real [[bench]] targets: bin targets
+# default to bench = true and would run the server binary under cargo bench.
+[[bin]]
+name = "_router"
+bench = false
+
 [dependencies]
 _database = { path = "../database", version = "*" }
 _functions = { path = "../functions", version = "*" }
