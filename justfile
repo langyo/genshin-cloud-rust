@@ -98,6 +98,8 @@ test:
 # Pure CPU benches always run; the DB group self-skips like the *_db tests.
 # To enable it, start the e2e Postgres (tests/docker) and run with
 #   GCS_TEST_DB=1 just bench
+# (Workspace lib targets set `bench = false`, so only real [[bench]] targets
+# run and criterion CLI flags reach the criterion harness.)
 bench *ARGS:
     cargo bench --workspace {{ARGS}}
 

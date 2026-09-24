@@ -70,6 +70,11 @@ async fn db() -> Option<&'static sea_orm::DatabaseConnection> {
     DB_CONN.get().map(|m| &m.pg_conn)
 }
 
+/// Serialize the tests that DROP/CREATE the shared FK-free tables: libtest
+/// runs test fns in parallel by default, and two concurrent recreations of
+/// the same tables race (one test's DROP meets the other's seed inserts).
+static TABLE_RECREATE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Build a CREATE TABLE statement for an entity with all FOREIGN KEY
 /// constraints stripped, so the table can be created in isolation without its
 /// dependency tables existing.
@@ -285,6 +290,7 @@ async fn area_and_item_doc_business_assertions() {
     let Some(db) = db().await else {
         return;
     };
+    let _tables = TABLE_RECREATE_LOCK.lock().await;
 
     // ── Setup: FK-free tables for area + item ────────────────────────────────
     let ddls = [
@@ -1840,6 +1846,7 @@ async fn marker_doc_diff_snapshot_filters_and_encodes_wire_bytes() {
     let Some(db) = db().await else {
         return;
     };
+    let _tables = TABLE_RECREATE_LOCK.lock().await;
     let now = chrono::Utc::now().naive_utc();
 
     recreate_tables_fklless(

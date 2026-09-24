@@ -22,11 +22,14 @@ COPY tests/rust/Cargo.toml          tests/rust/Cargo.toml
 
 # Stub member sources so cargo can resolve the workspace without the real code,
 # then fetch all dependencies. The stubs are overwritten when real sources land.
+# The bench stub is required too: cargo validates [[bench]] target paths when
+# parsing the manifest, so `cargo fetch` fails without a file there.
 RUN mkdir -p packages/utils/src packages/database/src packages/functions/src \
-        packages/router/src tests/rust/src \
+        packages/functions/benches packages/router/src tests/rust/src \
  && printf 'pub fn _stub() {}\n' > packages/utils/src/lib.rs \
  && printf 'pub fn _stub() {}\n' > packages/database/src/lib.rs \
  && printf 'pub fn _stub() {}\n' > packages/functions/src/lib.rs \
+ && printf 'fn main() {}\n' > packages/functions/benches/diff_snapshot.rs \
  && printf 'fn main() {}\n'        > packages/router/src/main.rs \
  && printf ''                       > tests/rust/src/lib.rs \
  && cargo fetch --locked
