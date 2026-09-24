@@ -83,6 +83,7 @@ just dev           # 启动开发栈（Rust + Vue）/ start dev stack (Rust + Vu
 just dev mock      # 启动 + Shirabe 浏览器 e2e 测试 / start + Shirabe e2e tests
 just dev stop      # 停止 / stop
 just dev status    # 状态 / check status
+just bench         # 跑 criterion 基准（差异快照流水线）/ run criterion benches
 ```
 
 ## 开发工具链 / Toolchain
