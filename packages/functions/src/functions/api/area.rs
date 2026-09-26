@@ -126,20 +126,23 @@ async fn is_leaf(db: &sea_orm::DatabaseConnection, area_id: i64) -> Result<bool>
 
 /// Java updateAreaIsFinal(parentId, isFinal)：直接设置地区（父级）的末端标志。
 /// parentId <= 0（如根级 -1）表示无父级，跳过。
+/// 实现统一见 super::set_derived_is_final。
 async fn set_parent_is_final(
     db: &sea_orm::DatabaseConnection,
     parent_id: i64,
     is_final: bool,
 ) -> Result<()> {
-    if parent_id <= 0 {
-        return Ok(());
-    }
-    area_model::Entity::update_many()
-        .col_expr(area_model::Column::IsFinal, Expr::value(is_final))
-        .filter(area_model::Column::Id.eq(parent_id))
-        .exec(db)
-        .await?;
-    Ok(())
+    super::set_derived_is_final(
+        db,
+        area_model::Entity,
+        area_model::Column::Id,
+        area_model::Column::IsFinal,
+        area_model::Column::UpdateTime,
+        area_model::Column::DelFlag,
+        parent_id,
+        is_final,
+    )
+    .await
 }
 
 /// Java recalculateAreaIsFinal：按剩余非删除子级数量重算末端标志。
