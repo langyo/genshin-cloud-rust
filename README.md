@@ -162,7 +162,7 @@ All variables are read from the process environment or the root `.env` file
 
 | 变量 / Variable | 必填 / Required | 默认 / Default | 用途与用法 / Purpose & usage |
 | --- | --- | --- | --- |
-| `JWT_SECRET` | **是** / **Yes** | 无 / none | HS256 签名密钥，缺失直接拒绝启动。生成：`openssl rand -base64 48`。<br>HS256 signing secret; the process refuses to start without it. Generate with `openssl rand -base64 48`. |
+| `JWT_SECRET` | **是** / **Yes** | 无 / none | HS256 签名密钥，缺失或弱值（不足 32 字符 / 占位符）直接拒绝启动。生成：`openssl rand -base64 48`。<br>HS256 signing secret; the process refuses to start without it or with a weak value (shorter than 32 characters / a placeholder). Generate with `openssl rand -base64 48`. |
 | `DB_HOST` | 否 / No | `localhost` | PostgreSQL 主机。/ PostgreSQL host. |
 | `DB_PORT` | 否 / No | `5432` | PostgreSQL 端口；非法值启动报错。/ PostgreSQL port; invalid values fail startup. |
 | `DB_USERNAME` | 否 / No | `genshin_map` | 数据库用户名。/ Database username. |
