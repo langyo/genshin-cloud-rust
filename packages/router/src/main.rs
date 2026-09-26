@@ -1,7 +1,3 @@
-pub mod functions;
-mod middlewares;
-mod routes;
-
 use anyhow::Result;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -10,8 +6,11 @@ use std::path::Path;
 use axum::serve;
 use tokio::net::TcpListener;
 
-use crate::routes::router;
+// The route table and middlewares live in the crate's lib target so the
+// integration tests can drive the assembled Router directly (oneshot); this
+// binary only does process-level wiring around it.
 use _database::init_db_conn;
+use _router::routes::router;
 
 /// 已知占位符 JWT_SECRET（比较时去空白、转小写）：示例/文档值被原样复制
 /// 进生产配置是最常见的密钥泄漏来源（看过文档的人都能伪造 token），

@@ -1926,8 +1926,10 @@ version = "0.2.2"
 dependencies = [
  "_database",
  "_functions",
+ "_router",
  "_utils",
  "anyhow",
+ "axum",
  "base64 0.22.1",
  "chrono",
  "flate2",
@@ -1938,11 +1940,13 @@ dependencies = [
  "redis",
  "regex-lite",
  "rsa",
+ "rustls",
  "sea-orm",
  "serde",
  "serde_json",
  "tokio",
  "tokio-test",
+ "tower",
  "uuid",
 ]
 

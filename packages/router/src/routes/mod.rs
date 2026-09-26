@@ -1,7 +1,9 @@
 mod api;
 mod cdn;
 mod system;
-mod ws;
+// `ws` 公开给 HTTP 层测试：oneshot 无法走真实 WS 升级，握手鉴权契约
+// （`ws_handshake_key`）只能在函数层直测。
+pub mod ws;
 
 use anyhow::Result;
 
