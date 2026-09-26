@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use chrono::Utc;
 
 use sea_orm::{
@@ -13,6 +13,7 @@ use _database::{
 };
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         tag_type::{
@@ -66,7 +67,9 @@ pub async fn do_update(
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     if payload.id == payload.base.parent_id {
-        return Err(anyhow!("标签类型ID不允许与父ID相同，会造成自身父子"));
+        return Err(
+            DomainError::Business("标签类型ID不允许与父ID相同，会造成自身父子".into()).into(),
+        );
     }
 
     let Some(t) = tag_type_model::Entity::find_safety_by_id(payload.id)

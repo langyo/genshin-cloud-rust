@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
@@ -10,6 +10,7 @@ use _database::DB_CONN;
 use _database::models::icon::{icon_type as icon_type_model, icon_type_link as itl_model};
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         IconTypeAddRequest, IconTypeUpdateRequest,
@@ -21,7 +22,9 @@ use _utils::{
 /// Java `IconTypeService` 同文案：禁止自身父子。
 fn check_id_parent(id: i64, parent_id: i64) -> Result<()> {
     if id == parent_id {
-        return Err(anyhow!("图标类型ID不允许与父ID相同，会造成自身父子"));
+        return Err(
+            DomainError::Business("图标类型ID不允许与父ID相同，会造成自身父子".into()).into(),
+        );
     }
     Ok(())
 }
