@@ -16,6 +16,12 @@
 //! 迁移期/可信内网使用），注册表键取自认证身份而非裸路径参数；注册时施加
 //! 单用户 8 连接与全局 2048 连接上限，事件改走 128 容量的有界通道——
 //! 慢消费者队列满即被主动断开（真实背压），杜绝无界队列堆积耗尽内存。
+//!
+//! 优雅停机配合：`begin_shutdown()` 经全局 watch 通道广播停机，各连接
+//! 循环（router 侧 `handle_socket`）经 `shutdown_subscribe()` 订阅，收到
+//! 通知即向客户端发送 Close 帧并退出。axum 的 graceful shutdown 要等
+//! 所有连接关闭才返回，长连 WebSocket 不主动断开会把进程在停机窗口内
+//! 一直挂住，所以 WS 侧必须配合先关。
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -86,6 +92,25 @@ pub fn ws_register(user_id: String) -> Result<(mpsc::Receiver<String>, WsGuard),
             sender: tx,
         },
     ))
+}
+
+/// 全局停机广播：`false` = 正常运行，`true` = 进入优雅停机。
+/// 用 watch 是为了让所有已订阅的连接循环同时观察到停机；static 永不
+/// drop，发送端在进程存续期间始终可用。
+static WS_SHUTDOWN_TX: Lazy<tokio::sync::watch::Sender<bool>> =
+    Lazy::new(|| tokio::sync::watch::channel(false).0);
+
+/// 广播 WS 停机：优雅停机开始时由 main 调用一次。用 `send_replace`
+/// 而非 `send`——tokio watch 的 `send` 在零接收端（此刻无任何 WS 连接）
+/// 时不落值直接返回 Err，`send_replace` 无条件写入，即「更新当前值」
+/// 语义；接收端数量为 0 时无人唤醒也无妨（本就没有连接需要关闭）。
+pub async fn begin_shutdown() {
+    WS_SHUTDOWN_TX.send_replace(true);
+}
+
+/// 订阅停机通知（连接循环的 select 分支使用）。
+pub fn shutdown_subscribe() -> tokio::sync::watch::Receiver<bool> {
+    WS_SHUTDOWN_TX.subscribe()
 }
 
 /// 构造 Java `W<T>` 结构的 JSON 文本：`{event, message, data, time}`。

@@ -109,6 +109,7 @@ async fn handle_socket(mut socket: WebSocket, user_id: String) {
         let _ = socket.send(Message::Close(None)).await;
         return;
     };
+    let mut shutdown_rx = _functions::functions::ws::shutdown_subscribe();
 
     loop {
         tokio::select! {
@@ -141,6 +142,15 @@ async fn handle_socket(mut socket: WebSocket, user_id: String) {
                 if socket.send(Message::Text(Utf8Bytes::from(payload))).await.is_err() {
                     break;
                 }
+            },
+            // 停机广播：main 的优雅停机先广播关闭 WS 会话，再排空 HTTP
+            // 在途请求（axum 要等所有连接关闭才退出，长连不关会挂住）。
+            // 收到通知即回 Close 帧断开。changed() 只有发送端 drop 才返回
+            // Err（全局 static 永不 drop），且值只会 false→true 变化一次，
+            // 故任何完成一律按停机处理，取最简写法。
+            _ = shutdown_rx.changed() => {
+                let _ = socket.send(Message::Close(None)).await;
+                break;
             },
         }
     }
