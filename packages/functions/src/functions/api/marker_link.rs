@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
@@ -13,6 +13,7 @@ use _database::{
 use _utils::types::MarkerLinkageLinkAction;
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         marker_link::{
@@ -121,7 +122,9 @@ async fn assert_markers_visible(
         {
             // 写路径可见性对称：不可见点位对调用者如同不存在
             if !allowed.contains(&(hidden_flag as i32)) {
-                return Err(anyhow!("无权操作该点位"));
+                // 权限拒绝按 Business 而非 Forbidden：真实 403 会触发前端登出，这里的
+                // 越权语义应展示文案而非强制下线。
+                return Err(DomainError::Business("无权操作该点位".into()).into());
             }
         }
     }
@@ -254,14 +257,14 @@ pub async fn do_link(
 
     // 校验（Java checkLinkList 同文案）：非空、端点合法、禁止自关联。
     if payload.is_empty() {
-        return Err(anyhow!("关联数据不可为空"));
+        return Err(DomainError::Business("关联数据不可为空".into()).into());
     }
     for p in &payload {
         if p.from_id <= 0 || p.to_id <= 0 {
-            return Err(anyhow!("无效的关联节点ID"));
+            return Err(DomainError::Business("无效的关联节点ID".into()).into());
         }
         if p.from_id == p.to_id {
-            return Err(anyhow!("不能将点位关联到自身"));
+            return Err(DomainError::Business("不能将点位关联到自身".into()).into());
         }
     }
 
