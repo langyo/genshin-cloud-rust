@@ -14,17 +14,11 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{CommonResponse, Pagination, SysUserVO},
+    text::escape_like,
     types::{AccessPolicyItemEnum, SystemUserRole, UserSort},
 };
 
 // 业务处理函数
-/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
-fn escape_like(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
-}
-
 /// 密码最小强度策略：至少 8 个字符（按字符数计）且非纯空白。注册/改密
 /// 入口共用，防止空/极短密码进入 bcrypt 落库（短密码可被离线秒级爆破）。
 fn ensure_password_policy(password: &str) -> Result<()> {
