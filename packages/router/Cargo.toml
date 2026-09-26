@@ -17,6 +17,12 @@ name = "init_db"
 path = "src/bin/init_db.rs"
 bench = false
 
+# The lib target exists so the integration tests (`tests/rust`) can drive the
+# assembled Router directly; keep it out of `cargo bench` targets like the
+# bins above.
+[lib]
+bench = false
+
 [dependencies]
 _database = { path = "../database", version = "*" }
 _functions = { path = "../functions", version = "*" }

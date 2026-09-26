@@ -54,7 +54,12 @@ pub async fn ws_handler(
 /// - 逃生阀关闭鉴权时：键 = 路径 userId（Java pass-filter 语义），但仍
 ///   校验键形态（非空、长度 ≤ 64、ASCII 字母数字/`-`/`_`），防无界/怪异
 ///   键撑爆注册表，不合法 → 400。
-async fn ws_handshake_key(
+///
+/// `pub` 供 HTTP 层测试直接断言鉴权契约（#134）：oneshot 请求没有真实
+/// 连接升级（`hyper::upgrade::OnUpgrade` 无公开构造器），axum 的
+/// `WebSocketUpgrade` 提取器会在进入 handler 前拒绝无升级头的请求，
+/// 401/403 的判定因此只能在函数层直测。
+pub async fn ws_handshake_key(
     headers: &HeaderMap,
     query_token: Option<String>,
     user_id: &str,
