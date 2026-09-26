@@ -854,11 +854,21 @@ async fn area_and_item_doc_business_assertions() {
     // ==== Assertion 8: QQ registration stores the QQ number ====
     // Java 契约：`/user/register/qq` 的 username 即 QQ 号，qq 字段缺省时
     // 取 username（不做 openid 语义；openid 需服务端授权码换取）。
-    let qq_id = user_fns::do_register_qq(None, None, None, "10001".into(), "pw123".into(), None)
-        .await
-        .expect("qq register succeeds")
-        .data
-        .expect("qq register returns id");
+    // 密码须满足最小长度策略（≥8 字符）；ip 供公开端点限流使用。
+    let qq_ip = "127.0.0.1:55555".parse::<std::net::SocketAddr>().unwrap();
+    let qq_id = user_fns::do_register_qq(
+        qq_ip,
+        None,
+        None,
+        None,
+        "10001".into(),
+        "pw12345678".into(),
+        None,
+    )
+    .await
+    .expect("qq register succeeds")
+    .data
+    .expect("qq register returns id");
     let qq_row = sys_user_model::Entity::find_by_id(qq_id)
         .one(db)
         .await
@@ -873,9 +883,17 @@ async fn area_and_item_doc_business_assertions() {
 
     // 重复注册同 QQ 号：username 占用被拒
     assert!(
-        user_fns::do_register_qq(None, None, None, "10001".into(), "pw123".into(), None)
-            .await
-            .is_err(),
+        user_fns::do_register_qq(
+            qq_ip,
+            None,
+            None,
+            None,
+            "10001".into(),
+            "pw12345678".into(),
+            None
+        )
+        .await
+        .is_err(),
         "duplicate qq register must fail"
     );
     // ── Assertion 9: score generation weights by field count ────────────────
@@ -1499,7 +1517,8 @@ async fn area_and_item_doc_business_assertions() {
     }
 
     // ── Assertion 12: anonymous client-credentials chain ─────────────────────
-    let anon = oauth_fns::oauth_client_credentials("all".into())
+    let anon_ip = "127.0.0.1:55556".parse::<std::net::SocketAddr>().unwrap();
+    let anon = oauth_fns::oauth_client_credentials(anon_ip, "all".into())
         .await
         .expect("client credentials issues an anonymous token");
     assert!(!anon.access_token.is_empty());

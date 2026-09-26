@@ -13,6 +13,23 @@ use tokio::net::TcpListener;
 use crate::routes::router;
 use _database::init_db_conn;
 
+/// 已知占位符 JWT_SECRET（比较时去空白、转小写）：示例/文档值被原样复制
+/// 进生产配置是最常见的密钥泄漏来源（看过文档的人都能伪造 token），
+/// 启动期一律拒绝。只影响启动检查，不改运行时 getter（集成测试在进程内
+/// 设了短 secret）。
+const JWT_SECRET_PLACEHOLDERS: [&str; 10] = [
+    "change-me-to-a-strong-random-secret",
+    "change_me_to_a_long_random_string",
+    "changeme",
+    "change-me",
+    "secret",
+    "dev-secret",
+    "test-secret",
+    "123456",
+    "your-secret-key",
+    "your_jwt_secret",
+];
+
 /// Tee target: forwards every formatted log record to stderr (always) and to
 /// a log file (only when `LOG_DIR` is set). File output is append-only, so
 /// container restarts never clobber previous logs.
@@ -96,6 +113,19 @@ async fn main() -> Result<()> {
         anyhow::bail!(
             "JWT_SECRET must be set (see .env.example); generate one with: openssl rand -base64 48"
         );
+    }
+
+    // 强度校验：只查存在不查强度等于放行弱密钥——短密钥可被离线暴力破解，
+    // 占位符值则任何看过文档的人都能伪造 token。阈值 32 字符与占位符集合
+    // 均为启动期硬拒绝（对齐上方缺失即 bail 的 fail-fast 风格）。
+    if let Ok(secret) = std::env::var("JWT_SECRET") {
+        let trimmed = secret.trim();
+        let normalized = trimmed.to_ascii_lowercase();
+        if trimmed.len() < 32 || JWT_SECRET_PLACEHOLDERS.contains(&normalized.as_str()) {
+            anyhow::bail!(
+                "JWT_SECRET is too weak: use at least 32 random characters and never a placeholder value (see .env.example); generate one with: openssl rand -base64 48"
+            );
+        }
     }
 
     let port = std::env::var("PORT")
