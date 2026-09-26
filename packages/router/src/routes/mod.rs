@@ -8,10 +8,14 @@ use axum::{
     Json, Router,
     extract::DefaultBodyLimit,
     http::StatusCode,
+    http::header::{HeaderValue, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS},
     middleware::from_extractor,
     response::IntoResponse,
     routing::{get, post},
 };
+
+use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::timeout::TimeoutLayer;
 
 use _utils::models::CommonResponse;
 
@@ -80,6 +84,12 @@ pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> RouteError {
     route_error(detail)
 }
 
+/// 请求级超时上限。60s：挡住慢请求长期占用 handler 的面（慢 SQL、挂起
+/// 的上游调用），同时给 `POST /api/score/data`（`ExtractAdmin` 鉴权、
+/// limit 上限 100_000 的重查询）留足余量；CDN 代理内部另有更短的 15s
+/// 上游超时，不会先撞到这里。
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
         .route("/oauth/token", post(system::oauth::oauth))
@@ -98,7 +108,31 @@ pub async fn router() -> Result<Router> {
         .layer(cors_layer())
         .layer(from_extractor::<crate::middlewares::ExtractUserAgent>())
         .layer(from_extractor::<crate::middlewares::ExtractIP>())
-        .layer(DefaultBodyLimit::max(1024 * 1024 * 16)); // 16 MiB
+        .layer(DefaultBodyLimit::max(1024 * 1024 * 16)) // 16 MiB
+        // 请求级 60s 超时（理由见 REQUEST_TIMEOUT），超时以 408 拒绝
+        // （tower-http 0.7 已弃用默认状态码的 `TimeoutLayer::new`）。
+        // 注意 tower-http 的 Timeout 只约束「响应 future」（收到请求 →
+        // 响应头就绪）：WebSocket 的 101 握手响应立即返回，升级完成后的
+        // 长连 socket 不在覆盖范围，不会被 60s 掐断——勿因「WS 看似不受
+        // 限」而误删本层。
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            REQUEST_TIMEOUT,
+        ))
+        // 安全响应头（overriding 保证逐响应存在）：
+        // - nosniff：禁止浏览器对响应体做 MIME 嗅探——/cdn 图片代理硬编码
+        //   `Content-Type: image/png`（不随真实文件类型变化），该路径尤其
+        //   需要这层兜底；
+        // - Referrer-Policy: no-referrer：不向第三方泄漏站内 URL。
+        // HSTS 留给 TLS 终结层（本服务纯 HTTP，在此声明反而误导）。
+        .layer(SetResponseHeaderLayer::overriding(
+            X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            REFERRER_POLICY,
+            HeaderValue::from_static("no-referrer"),
+        ));
 
     Ok(ret)
 }

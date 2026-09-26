@@ -59,6 +59,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
     && rm -rf /var/lib/apt/lists/*
 
+# Non-root runtime user. LOG_DIR 若在容器内启用，目录需对该 UID 可写。
+RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --no-create-home app
+USER app
+
 WORKDIR /app
 COPY --from=builder /usr/local/bin/_router /usr/local/bin/_router
 
@@ -66,6 +70,9 @@ COPY --from=builder /usr/local/bin/_router /usr/local/bin/_router
 # override with the PORT env var if needed.
 ENV RUST_LOG=info
 EXPOSE 80
+
+# Pure-compute probe: JWKS needs no DB/Redis, so it isolates "process alive".
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD wget -q --spider "http://127.0.0.1:${PORT:-80}/.well-known/jwks.json" || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "_router"]
 

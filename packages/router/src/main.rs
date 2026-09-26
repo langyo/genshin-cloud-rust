@@ -86,6 +86,44 @@ fn open_log_file() -> Option<std::fs::File> {
     }
 }
 
+/// 优雅停机信号源：Ctrl+C 或（Unix 下）SIGTERM 二者先到者。
+///
+/// 生产容器里 tini 把 `docker stop` 的 SIGTERM 转发给本进程（见 Dockerfile
+/// 的 tini 注释），本函数兑现其宣称的优雅停机：收到信号后**先**广播关闭
+/// 全部 WebSocket 会话（`begin_shutdown`），再返回交给 axum 的 graceful
+/// shutdown 等待 HTTP 在途请求排空。axum 会等所有连接关闭才退出，长连
+/// WS 若不主动断开会把进程在停机窗口内一直挂住——所以 WS 侧必须配合
+/// 先关（停机广播的实现见 `_functions::functions::ws`）。
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            },
+            // 信号处理注册失败（极端环境）：该分支永不成真，仅剩 Ctrl+C 可触发。
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+
+    // Windows 无 SIGTERM：用永不成真的 future 占位，保持 select 形状一致，
+    // 同一份代码在两个平台都能编译（CI 含 windows-latest 测试 job）。
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    _functions::functions::ws::begin_shutdown().await;
+    log::info!("shutdown signal received, WS sessions closed, draining in-flight requests");
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     // Install the ring crypto provider for jsonwebtoken (v10 requires an
@@ -143,7 +181,11 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
         .expect("Failed to bind");
-    serve(listener, router).await?;
+    // 优雅停机：tini 转发的 SIGTERM / Ctrl+C 触发 shutdown_signal——先广播
+    // 关闭 WS 会话，再等 HTTP 在途请求排空后退出（细节见 shutdown_signal）。
+    serve(listener, router)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
     Ok(())
 }
