@@ -23,7 +23,7 @@ use once_cell::sync::OnceCell;
 pub static DB_CONN: OnceCell<Arc<DatabaseConnectionMap>> = OnceCell::new();
 
 pub async fn init_db_conn() -> anyhow::Result<()> {
-    let conn_map = Arc::new(build_db_map().await?);
+    let conn_map = Arc::new(connect_db_map().await?);
     DB_CONN
         .set(conn_map)
         .map_err(|_| anyhow!("DB_CONN already initialized"))
@@ -79,7 +79,7 @@ pub fn encode_url_component(input: &str) -> String {
 
 /// 面向 CLI 工具（init_db / _migration CLI）的单用途 Postgres 连接。
 ///
-/// 与 [`build_db_map`] 的差异：不做连接池调优、不碰 Redis/MinIO——初始化
+/// 与 [`connect_db_map`] 的差异：不做连接池调优、不碰 Redis/MinIO——初始化
 /// 与迁移工具只需要一条能执行 DDL 的连接。URL 组装（`DB_*` env、凭据
 /// percent-encode）与 `search_path` 绑定（schema 名经 [`default_schema`]
 /// 校验回退）和主服务/init_db 完全同源，此前 init_db 自建连接的那份逻辑
@@ -116,7 +116,13 @@ pub async fn connect_standalone_pg() -> Result<DatabaseConnection> {
     Ok(db)
 }
 
-async fn build_db_map() -> Result<DatabaseConnectionMap> {
+/// 构建一份自持的连接映射（Postgres 必需，Redis / MinIO 可选降级）。
+///
+/// 纯构造器：只读环境变量并建立连接，**不写入全局 `DB_CONN`**——供测试与
+/// 工具自持实例（测试隔离 / 故障注入不依赖全局单例）。需要全局单例语义的
+/// 启动路径走 [`init_db_conn`]（连接 + 写入全局），二者共用本实现。
+/// 返回裸 [`DatabaseConnectionMap`]，是否包 `Arc` 由调用方决定。
+pub async fn connect_db_map() -> Result<DatabaseConnectionMap> {
     // ── Postgres (required — startup fails if unreachable) ─────────────────
     let pg_conn = {
         let db_port = match std::env::var("DB_PORT") {
