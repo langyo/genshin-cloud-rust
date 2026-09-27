@@ -5,11 +5,11 @@
 
 pub mod models;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use log::{info, warn};
 use std::{sync::Arc, time::Duration};
 
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 
 #[derive(Debug, Clone)]
 pub struct DatabaseConnectionMap {
@@ -75,6 +75,45 @@ pub fn encode_url_component(input: &str) -> String {
         }
     }
     out
+}
+
+/// 面向 CLI 工具（init_db / _migration CLI）的单用途 Postgres 连接。
+///
+/// 与 [`build_db_map`] 的差异：不做连接池调优、不碰 Redis/MinIO——初始化
+/// 与迁移工具只需要一条能执行 DDL 的连接。URL 组装（`DB_*` env、凭据
+/// percent-encode）与 `search_path` 绑定（schema 名经 [`default_schema`]
+/// 校验回退）和主服务/init_db 完全同源，此前 init_db 自建连接的那份逻辑
+/// 收拢到这里，不再两处抄写。连接成功后立即 `CREATE SCHEMA IF NOT
+/// EXISTS`——两个调用方都需要 schema 先于建表存在，全新实例可一次跑到
+/// 底。
+pub async fn connect_standalone_pg() -> Result<DatabaseConnection> {
+    let db_port = std::env::var("DB_PORT")
+        .ok()
+        .and_then(|v| v.parse::<u16>().ok())
+        .unwrap_or(5432);
+    let url = format!(
+        "postgres://{}:{}@{}:{}/{}",
+        encode_url_component(&std::env::var("DB_USERNAME").unwrap_or("genshin_map".into())),
+        encode_url_component(&std::env::var("DB_PASSWORD").unwrap_or_default()),
+        std::env::var("DB_HOST").unwrap_or_else(|_| "localhost".into()),
+        db_port,
+        encode_url_component(
+            &std::env::var("DB_DATABASE").unwrap_or_else(|_| "genshin_map".into())
+        ),
+    );
+    // 实体不带 schema 限定；未限定的 DDL/查询经连接 `search_path` 落进
+    // 配置的 schema（与主服务一致）。
+    let mut opt = ConnectOptions::new(url.clone());
+    opt.set_schema_search_path(default_schema());
+    let db = Database::connect(opt)
+        .await
+        .with_context(|| format!("connect to {url}"))?;
+
+    let schema = default_schema();
+    db.execute_unprepared(&format!(r#"CREATE SCHEMA IF NOT EXISTS "{schema}""#))
+        .await
+        .context("create schema")?;
+    Ok(db)
 }
 
 async fn build_db_map() -> Result<DatabaseConnectionMap> {
