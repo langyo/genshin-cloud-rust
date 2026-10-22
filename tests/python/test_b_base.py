@@ -137,6 +137,24 @@ if wrap_ok(pr) and isinstance(pr.get("data"), dict):
     uv = pr["data"].get("urlVariants") or {}
     check("urlVariants roundtrip hd", uv.get("hd") == "https://example.com/a_hd.png", str(uv)[:120])
     check("urlVariants roundtrip custom key", uv.get("custom_key") == "https://example.com/a_ck.png", str(uv)[:120])
+    vo = pr["data"]
+    # Java IconVo 全字段契约：tag（非 name）/审计字段/typeIdList/description
+    check("icon VO uses tag field", vo.get("tag") == "regress_tag_a", str(vo)[:150])
+    check("icon VO carries creatorId", isinstance(vo.get("creatorId"), int), str(vo)[:150])
+    check("icon VO carries typeIdList", itype in (vo.get("typeIdList") or []), str(vo)[:150])
+    check("icon VO carries createTime", isinstance(vo.get("createTime"), (int, float)), str(vo)[:150])
+    check("icon VO carries description", "description" in vo, str(vo)[:150])
+
+# icon list：tag 搜索 + 信封 users + PageListVo {record,total,size}
+st, pr = call("POST", "/api/icon/get/list", token=manager, body={"tag": "regress_tag_a", "current": 1, "size": 10})
+check("icon list by tag 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:200]}")
+if wrap_ok(pr) and isinstance(pr.get("data"), dict):
+    d = pr["data"]
+    check("icon list envelope has record/total/size",
+          all(k in d for k in ("record", "total", "size")), str(list(d.keys())))
+    check("icon list finds regress icon", any(r.get("id") == icon_a for r in d.get("record") or []), str(d)[:150])
+    check("icon list envelope users map populated",
+          isinstance(pr.get("users"), dict) and len(pr.get("users") or {}) > 0, str(pr.get("users"))[:120])
 
 # icon update: Map-merge semantics — key-level patch
 st, pr = call("GET", f"/api/icon/get/single/{icon_a}", token=manager)

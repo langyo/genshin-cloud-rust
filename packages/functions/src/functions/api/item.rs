@@ -275,14 +275,19 @@ pub async fn do_get_list(
     let type_map = type_id_map(db).await?;
     let count_map = marker_count_map(db).await?;
     let mut arr = Vec::with_capacity(items.len());
-    for it in items {
-        arr.push(item_to_vo(&it, &type_map, &icon_tag_map, &count_map));
+    for it in &items {
+        arr.push(item_to_vo(it, &type_map, &icon_tag_map, &count_map));
     }
-    let payload = ItemListResponse {
+    let resp = ItemListResponse {
         total: total as i64,
+        size: size as i64,
         items: arr,
     };
-    Ok(CommonResponse::new(Ok(payload)))
+    // 前端物品管理页读取信封 users 显示创建者昵称（与 marker/history 一致）。
+    let creator_ids: std::collections::HashSet<i64> =
+        items.iter().filter_map(|it| it.creator_id).collect();
+    let users = super::sys_user_map(db, &creator_ids).await?;
+    Ok(CommonResponse::new(Ok(resp)).with_users(users))
 }
 
 // 将多个物品加入到某个类型（在 link 表中插入或更新）
@@ -390,10 +395,13 @@ pub async fn do_get_list_by_id(
     let type_map = type_id_map(db).await?;
     let count_map = marker_count_map(db).await?;
     let mut arr = Vec::with_capacity(items.len());
-    for it in items {
-        arr.push(item_to_vo(&it, &type_map, &icon_tag_map, &count_map));
+    let creator_ids: std::collections::HashSet<i64> =
+        items.iter().filter_map(|it| it.creator_id).collect();
+    for it in &items {
+        arr.push(item_to_vo(it, &type_map, &icon_tag_map, &count_map));
     }
-    Ok(CommonResponse::new(Ok(arr)))
+    let users = super::sys_user_map(db, &creator_ids).await?;
+    Ok(CommonResponse::new(Ok(arr)).with_users(users))
 }
 
 pub async fn do_delete(

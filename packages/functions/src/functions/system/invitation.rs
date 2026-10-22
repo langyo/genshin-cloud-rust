@@ -90,6 +90,7 @@ pub async fn do_list(
     let users = crate::functions::api::sys_user_map(db, &creator_ids).await?;
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "total": total,
+        "size": size as i64,
         "record": record,
     })))
     .with_users(users))
@@ -227,7 +228,15 @@ pub async fn do_info_public(
         .one(db)
         .await?
         .ok_or_else(|| DomainError::Business("Invitation code not found".into()))?;
-    Ok(CommonResponse::new(Ok(serde_json::to_value(inv)?)))
+    // Java checkInvitation 返回 SysUserInvitationSmallVo（仅 code + username）；
+    // 直接序列化实体会把 create_time / del_flag / access_policy 等内部字段
+    // 泄漏给未注册的公开调用方。
+    Ok(CommonResponse::new(Ok(serde_json::to_value(
+        _utils::models::SysUserInvitationSmallVo {
+            code: inv.code,
+            username: inv.username,
+        },
+    )?)))
 }
 
 pub async fn do_info(
@@ -242,7 +251,15 @@ pub async fn do_info(
         .one(db)
         .await?
         .ok_or_else(|| DomainError::Business("Invitation code not found".into()))?;
-    Ok(CommonResponse::new(Ok(serde_json::to_value(inv)?)))
+    // Java checkInvitation 返回 SysUserInvitationSmallVo（仅 code + username）；
+    // 直接序列化实体会把 create_time / del_flag / access_policy 等内部字段
+    // 泄漏给未注册的公开调用方。
+    Ok(CommonResponse::new(Ok(serde_json::to_value(
+        _utils::models::SysUserInvitationSmallVo {
+            code: inv.code,
+            username: inv.username,
+        },
+    )?)))
 }
 
 /// Consume (use) an invitation code — creates the invited user with the

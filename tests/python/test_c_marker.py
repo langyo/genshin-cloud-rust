@@ -15,7 +15,7 @@ if not auth_ready():
     print("skipped: set REGRESSION_PASSWORD")
     sys.exit(0)
 
-from common import login, call, check, check_eq, section, summary
+from common import login, call, raw_call, check, check_eq, section, summary
 
 admin, _ = login("regress_admin")
 punctuate, resp_punc = login("regress_punctuate")
@@ -173,6 +173,86 @@ st, _ = call("PUT", "/api/marker/single", token=user_t, body={
 check("MAP_USER marker write forbidden", st == 403, f"st={st}")
 st, _ = call("POST", "/api/marker/get/id", token=user_t, body={"areaIdList": [AREA]})
 check("MAP_USER marker read ok", st == 200, f"st={st}")
+
+section("C-4 GET /marker_doc/list_markers (full protobuf export)")
+
+import gzip as _gzip
+import io as _io
+
+
+def _read_varint(buf, i):
+    v, shift = 0, 0
+    while True:
+        b = buf[i]
+        i += 1
+        v |= (b & 0x7F) << shift
+        if not b & 0x80:
+            return v, i
+        shift += 7
+
+
+def _top_level_fields(buf):
+    """解析 protobuf 顶层字段：yield (field_no, wire_type, payload_bytes)。"""
+    i = 0
+    while i < len(buf):
+        tag, i = _read_varint(buf, i)
+        fn, wt = tag >> 3, tag & 7
+        if wt == 2:
+            ln, i = _read_varint(buf, i)
+            yield fn, wt, buf[i:i + ln]
+            i += ln
+        elif wt == 0:
+            v, i = _read_varint(buf, i)
+            yield fn, wt, v
+        else:
+            raise ValueError(f"unexpected wire type {wt} at {i}")
+
+
+def _marker_id_from_entry(msg):
+    """MarkerVo 子消息里取 field 2（id，varint）。"""
+    for fn, wt, v in _top_level_fields(msg):
+        if fn == 2 and wt == 0:
+            return v
+    return None
+
+
+def _list_marker_ids(token):
+    st, hdrs, payload = raw_call("GET", "/api/marker_doc/list_markers", token=token)
+    if st != 200 or not isinstance(payload, (bytes, bytearray)):
+        return st, hdrs, payload, None
+    raw = payload if isinstance(payload, bytes) else bytes(payload)
+    if raw[:2] != b"\x1f\x8b":
+        return st, hdrs, raw, "not-gzip"
+    plain = _gzip.decompress(raw)
+    ids = set()
+    users = 0
+    for fn, wt, v in _top_level_fields(plain):
+        if fn == 1 and wt == 2:
+            mid = _marker_id_from_entry(v)
+            if mid is not None:
+                ids.add(mid)
+        elif fn == 2 and wt == 2:
+            users += 1
+    return st, hdrs, raw, (ids, users)
+
+
+st, hdrs, raw, parsed = _list_marker_ids(admin)
+check("list_markers 200 octet-stream", st == 200 and isinstance(raw, (bytes, bytearray)), f"st={st}")
+check("list_markers content-type octet-stream", "octet-stream" in (hdrs.get("Content-Type") or ""), str(hdrs.get("Content-Type")))
+check("list_markers is gzip", isinstance(raw, (bytes, bytearray)) and raw[:2] == b"\x1f\x8b", str(raw[:4]))
+if isinstance(parsed, tuple):
+    ids, users = parsed
+    check("list_markers contains created marker", m_normal in ids, f"m_normal={m_normal} count={len(ids)}")
+    check("list_markers protobuf markers non-empty", len(ids) > 0)
+else:
+    check("list_markers protobuf parses", False, str(parsed)[:120])
+
+st, _, _, parsed_user = _list_marker_ids(user_t)
+if isinstance(parsed_user, tuple):
+    ids_user, _u = parsed_user
+    check("MAP_USER list_markers excludes hidden/beta markers",
+          m_hidden not in ids_user and m_beta not in ids_user,
+          f"hidden={m_hidden in ids_user} beta={m_beta in ids_user}")
 
 section("cleanup")
 st, pr = call("DELETE", f"/api/area/{AREA}", token=admin)

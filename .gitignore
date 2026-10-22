@@ -13,3 +13,6 @@
 *.pyc
 __pycache__/
 .mimosa/
+
+# Staged celestia-devtools recipes (just fetch)
+/.just/

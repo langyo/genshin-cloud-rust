@@ -118,6 +118,7 @@ pub async fn do_get_list(
     let users = super::sys_user_map(&db.pg_conn, &creator_ids).await?;
     Ok(CommonResponse::new(Ok(HistoryListResponse {
         total: total as usize,
+        size: size as usize,
         items: arr,
     }))
     .with_users(users))

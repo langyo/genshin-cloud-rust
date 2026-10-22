@@ -414,7 +414,7 @@ pub async fn do_list(
 
     let vos: Vec<SysUserVO> = items.into_iter().map(Into::into).collect();
     Ok(CommonResponse::new(Ok(
-        serde_json::json!({"total": total, "record": vos}),
+        serde_json::json!({"total": total, "size": size as i64, "record": vos}),
     )))
 }
 

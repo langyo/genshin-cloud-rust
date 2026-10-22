@@ -23,27 +23,30 @@
 ## 运行前置
 
 1. **数据库**：`docker compose -f tests/docker/docker-compose.e2e.yml up -d`
-   起本地 Postgres + MinIO + Redis，或把后端指向 dev 库。注意：少数断言
-   依赖 dev 量级的数据形状（如 beta 专属 doc 分页、marker_doc 多分页、
-   area 列表非空），全新空库上会以「数据不足」的形式失败——属预期。
-2. **后端**：本地启动（默认监听 `http://127.0.0.1:8101`）。
-3. **种子账号**：库中须预先存在 6 个 `regress_*` 账号，口令一致且等于
-   `REGRESSION_PASSWORD`：
 
-   | 账号 | role |
-   | --- | --- |
-   | `regress_admin` | admin (0) |
-   | `regress_manager` | MAP_MANAGER (1) |
-   | `regress_beta` | MAP_NEIGUI (2) |
-   | `regress_punctuate` | MAP_PUNCTUATE (3) |
-   | `regress_user` | MAP_USER (4) |
-   | `regress_newuser` | MAP_USER (4)，注册重复名断言的目标账号 |
+起本地 Postgres + MinIO + Redis，或把后端指向 dev 库。注意：少数断言
+依赖 dev 量级的数据形状（如 beta 专属 doc 分页、`marker_doc` 多分页、
+area 列表非空），全新空库上会以「数据不足」的形式失败——属预期。
 
-   `regress_newuser` 供 `test_g_user` 的注册断言使用：套件首次运行会尝试
-   注册它，已存在时断言按「already exists」宽容通过，两种状态都合法。
+1. **后端**：本地启动（默认监听 `http://127.0.0.1:8101`）。
+1. **种子账号**：库中须预先存在 6 个 `regress_*` 账号，口令一致且等于
 
-   目前仓库没有 seed 脚本入口；账号由运维手工或既有 seed 流程创建，口令
-   写法可参考（`password` 列为 bcrypt 密文，与 `REGRESSION_PASSWORD` 对应）：
+`REGRESSION_PASSWORD`：
+
+| 账号 | role |
+| --- | --- |
+| `regress_admin` | admin (0) |
+| `regress_manager` | MAP_MANAGER (1) |
+| `regress_beta` | MAP_NEIGUI (2) |
+| `regress_punctuate` | MAP_PUNCTUATE (3) |
+| `regress_user` | MAP_USER (4) |
+| `regress_newuser` | MAP_USER (4)，注册重复名断言的目标账号 |
+
+`regress_newuser` 供 `test_g_user` 的注册断言使用：套件首次运行会尝试
+注册它，已存在时断言按「already exists」宽容通过，两种状态都合法。
+
+目前仓库没有 seed 脚本入口；账号由运维手工或既有 seed 流程创建，口令
+写法可参考（`password` 列为 bcrypt 密文，与 `REGRESSION_PASSWORD` 对应）：
 
    ```sql
    -- 示意：role_id 与 username 一一对应，见上表

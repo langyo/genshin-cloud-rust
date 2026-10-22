@@ -54,12 +54,18 @@ pub(crate) async fn sys_user_map(
         );
     }
     for u in rows {
+        // Java SysUserSmallVo 契约：username/nickname/qq 恒在（null 序列化为
+        // null），phone/logo/remark 可选；**无 id 字段**（key 即用户 id，
+        // 前端按 key 关联）。
         users.insert(
             u.id.to_string(),
             serde_json::json!({
-                "id": u.id,
                 "username": u.username,
                 "nickname": u.nickname,
+                "qq": u.qq,
+                "phone": u.phone,
+                "logo": u.logo,
+                "remark": u.remark,
             }),
         );
     }

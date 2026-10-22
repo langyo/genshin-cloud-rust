@@ -36,52 +36,84 @@ fn oauth_error(code: StatusCode, error: &str, description: &str) -> OAuthError {
     )
 }
 
-#[tracing::instrument(skip(db, form))]
+#[tracing::instrument(skip(db, req))]
 pub async fn oauth(
     State(db): State<crate::routes::SharedDb>,
     ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
     ExtractIP(ip): ExtractIP,
     ExtractUserAgent(user_agent): ExtractUserAgent,
     Query(query): Query<LoginQuery>,
-    form: Option<Multipart>,
+    req: axum::extract::Request,
 ) -> Result<impl IntoResponse, OAuthError> {
+    use axum::extract::FromRequest;
+    use axum::http::header::CONTENT_TYPE;
+
     let ip = ip.unwrap_or(native_ip);
 
-    // 刷新 token 分支由前端以 `application/json` + query 参数请求（无 body），
-    // 此时 Multipart extractor 会因 Content-Type 不匹配而 415 —— 用 Option 兜底，
-    // 仅 password 模式（multipart/form-data）才消费 form 字段。
-    let mut form_fields = if let Some(mut form) = form {
-        let mut ret = HashMap::new();
-        while let Some(field) = form.next_field().await.map_err(|err| {
+    // 表单字段的三种到达通道（Java Spring OAuth2 全兼容：GET/POST ×
+    // query/form，form 同时接受 multipart 与 x-www-form-urlencoded）：
+    // - multipart/form-data（前端 FormData 登录）；
+    // - application/x-www-form-urlencoded（标准 OAuth2 客户端与旧前端的
+    //   refresh 请求）；
+    // - 其余（JSON / 空 body）：字段只可能在 query 里。
+    let (parts, body) = req.into_parts();
+    let content_type = parts
+        .headers
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let bytes = axum::body::to_bytes(body, 1024 * 1024)
+        .await
+        .map_err(|err| {
             oauth_error(
                 StatusCode::BAD_REQUEST,
                 "invalid_request",
-                &format!("Failed to read form field: {err}"),
+                &format!("Failed to read body: {err}"),
             )
-        })? {
-            let name = field
-                .name()
-                .ok_or_else(|| {
+        })?;
+    let req = axum::extract::Request::from_parts(parts, axum::body::Body::from(bytes));
+
+    let mut form_fields: HashMap<String, String> =
+        if content_type.starts_with("multipart/form-data") {
+            let mut ret = HashMap::new();
+            if let Ok(mut form) = Multipart::from_request(req, &()).await {
+                while let Some(field) = form.next_field().await.map_err(|err| {
                     oauth_error(
                         StatusCode::BAD_REQUEST,
                         "invalid_request",
-                        "Field name is required",
+                        &format!("Failed to read form field: {err}"),
                     )
-                })?
-                .to_string();
-            let value = field.text().await.map_err(|err| {
-                oauth_error(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_request",
-                    &format!("Failed to read form field {name}: {err}"),
-                )
-            })?;
-            ret.insert(name, value);
-        }
-        ret
-    } else {
-        HashMap::new()
-    };
+                })? {
+                    let name = field
+                        .name()
+                        .ok_or_else(|| {
+                            oauth_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request",
+                                "Field name is required",
+                            )
+                        })?
+                        .to_string();
+                    let value = field.text().await.map_err(|err| {
+                        oauth_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request",
+                            &format!("Failed to read form field {name}: {err}"),
+                        )
+                    })?;
+                    ret.insert(name, value);
+                }
+            }
+            ret
+        } else if content_type.starts_with("application/x-www-form-urlencoded") {
+            axum::extract::Form::from_request(req, &())
+                .await
+                .map(|axum::extract::Form(map)| map)
+                .unwrap_or_default()
+        } else {
+            HashMap::new()
+        };
     if !form_fields.is_empty() {
         let grant_type = form_fields.remove("grant_type").ok_or_else(|| {
             oauth_error(

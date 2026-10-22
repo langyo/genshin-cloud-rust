@@ -156,6 +156,10 @@ pub enum HistoryOperationType {
     /// 点位
     #[sea_orm(num_value = 4)]
     Position = 4,
+    /// 图标标签（Java `HistoryEnum.ICONTAG`；前端 `shared/history.ts`
+    /// 已定义 type=5，当前 UI 未发送但契约必须可解析）
+    #[sea_orm(num_value = 5)]
+    IconTag = 5,
 }
 
 /// 序列化为**数字**（Java 契约；前端 `type: 4|3` 数字消费）。
@@ -181,6 +185,7 @@ impl<'de> Deserialize<'de> for HistoryOperationType {
                 Some(2) => Ok(HistoryOperationType::Icon),
                 Some(3) => Ok(HistoryOperationType::Item),
                 Some(4) => Ok(HistoryOperationType::Position),
+                Some(5) => Ok(HistoryOperationType::IconTag),
                 _ => Err(serde::de::Error::custom(format!(
                     "unknown operationType {n}"
                 ))),
@@ -190,6 +195,7 @@ impl<'de> Deserialize<'de> for HistoryOperationType {
                 "Icon" => Ok(HistoryOperationType::Icon),
                 "Item" => Ok(HistoryOperationType::Item),
                 "Position" => Ok(HistoryOperationType::Position),
+                "IconTag" | "ICONTAG" => Ok(HistoryOperationType::IconTag),
                 _ => Err(serde::de::Error::custom(format!(
                     "unknown operationType {s}"
                 ))),
