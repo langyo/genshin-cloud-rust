@@ -95,9 +95,9 @@ pub enum HistoryEditType {
     /// 删除
     #[sea_orm(num_value = 3)]
     Deleted = 3,
-    /// 初始化（历史数据导入）
+    /// Java `HistoryEditType.TWEAK`（=10；旧名 Initialized，数值不变）
     #[sea_orm(num_value = 10)]
-    Initialized = 10,
+    Tweak = 10,
 }
 
 /// 序列化为**数字**（Java 契约）。
@@ -123,7 +123,7 @@ impl<'de> Deserialize<'de> for HistoryEditType {
                 Some(1) => Ok(HistoryEditType::Added),
                 Some(2) => Ok(HistoryEditType::Modified),
                 Some(3) => Ok(HistoryEditType::Deleted),
-                Some(10) => Ok(HistoryEditType::Initialized),
+                Some(10) => Ok(HistoryEditType::Tweak),
                 _ => Err(serde::de::Error::custom(format!("unknown editType {n}"))),
             },
             serde_json::Value::String(s) => match s.as_str() {
@@ -131,7 +131,7 @@ impl<'de> Deserialize<'de> for HistoryEditType {
                 "1" | "Added" => Ok(HistoryEditType::Added),
                 "2" | "Modified" => Ok(HistoryEditType::Modified),
                 "3" | "Deleted" => Ok(HistoryEditType::Deleted),
-                "10" | "Initialized" => Ok(HistoryEditType::Initialized),
+                "10" | "Initialized" | "Tweak" => Ok(HistoryEditType::Tweak),
                 _ => Err(serde::de::Error::custom(format!("unknown editType {s}"))),
             },
             _ => Err(serde::de::Error::custom(

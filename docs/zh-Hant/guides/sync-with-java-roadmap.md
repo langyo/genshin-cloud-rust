@@ -67,6 +67,26 @@ zh-Hans 版逐條記錄）：
 
 marker 新增請求欄位放寬為 serde 缺省。
 
+## 2026-10 第二波（遺留項落實）
+
+- **history 寫路徑補齊**：marker 更新/刪除/tweak 與 item 更新/刪除現在
+
+落 history 行（記錄**變更前**狀態的 camelCase DTO JSON，含 md5）。
+
+- **score 生成對齊 Java 演算法**：相鄰歷史對差分（fields 按欄位計次、
+
+chars 按 `markerTitle`/content 的 Levenshtein 距離）、首尾比對條目合成、
+記帳歸屬「前一條建立者 × Asia/Shanghai 日桶」。
+
+- **圖片直鏈統一改寫**：`ICON_PROXY_BASE` 現對 icon 響應、res 的
+
+`fileUrl` 與 `tag_doc` 一併生效。
+
+- **`item_type` 更新請求** hiddenFlag 放寬為 serde 缺省。
+- **WS 契約更新**：確認最新前端已遷 socket.io；遷移前本地樹的
+
+`?token=` 補丁在前端倉 `fix/ws-token-query` 分支。
+
 ## 跟進事項
 
 - 上述差距項排入迭代 backlog（見根目錄 `PLAN.md`），

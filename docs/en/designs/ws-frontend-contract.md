@@ -83,3 +83,18 @@ Option 1 when `map_register_v3` moves to the Rust backend. The decision
 belongs to the frontend maintainers; this document is the hand-off. The
 `WS_AUTH_REQUIRED` escape hatch exists for a migration window if a legacy
 consumer that cannot send tokens turns up.
+
+## 2026-10-22 update
+
+- The socket.io migration has landed on `origin/dev` (`map_register_v3`,
+
+since 2026-09: `src/worker/webSocket/socket.worker.ts` consumes
+socket.io options directly, and `src/stores/socket/hooks/useSocket.ts`
+opens the connection with path/query). The socket.io-client finding above
+is now a confirmed fact; the path-1/2 decision stays open.
+
+- The pre-migration local tree has been patched per the token convention
+
+(branch `fix/ws-token-query`: `getURL` appends `?token=`). That patch
+does not apply to the migrated socket.io channel — it only serves the
+transition window while a raw-WS frontend build is still in use.

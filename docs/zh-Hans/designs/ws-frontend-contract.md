@@ -1,6 +1,6 @@
 # WebSocket 前端契约
 
-状态：**待前端侧决策** · 最近核实：2026-09-27
+状态：**待前端侧决策** · 最近核实：2026-10-22
 
 本文记录 Rust 后端推送通道的契约、前端仓库当前实际消费的情况、以及收敛
 两者的可选路径。目的在于把事实摆全再决策——后端侧已定型并完成加固，本文
@@ -67,3 +67,16 @@ socket.io-client 换成原生 `WebSocket` + 本文的 token 约定是受控改�
 在 `map_register_v3` 切到 Rust 后端时选路径 1。决策权在前端维护者；本文
 即交接文档。若未来出现无法带 token 的旧消费者，`WS_AUTH_REQUIRED` 逃生阀
 专为迁移窗口保留。
+
+## 2026-10-22 更新
+
+- **socket.io 迁移已在 `origin/dev` 落地**（`map_register_v3` 2026-09 起，
+
+`src/worker/webSocket/socket.worker.ts` 直接消费 socket.io opts、
+`src/stores/socket/hooks/useSocket.ts` 以 path/query 打开连接）：上述
+「socket.io-client 消费」判断升级为既成事实，路径 1/2 的取舍仍开放。
+
+- 迁移前的本地树已按 token 约定修补（分支 `fix/ws-token-query`：
+
+`getURL` 拼接 `?token=`）——该补丁对迁移后的 socket.io 通道无效，
+仅服务仍运行裸 WS 版本前端的过渡窗口。

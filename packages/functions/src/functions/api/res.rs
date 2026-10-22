@@ -96,7 +96,7 @@ pub async fn do_get(
     let body = if exists {
         serde_json::json!({
             "filePath": key,
-            "fileUrl": public_url(&public_base, "images", &key),
+            "fileUrl": super::rewrite_image_url(&public_url(&public_base, "images", &key)),
         })
     } else {
         serde_json::json!({})
@@ -213,7 +213,7 @@ pub async fn do_upload_image(
         .await
         .context("upload to MinIO failed")?;
 
-    let file_url = public_url(&public_base, "images", &key);
+    let file_url = super::rewrite_image_url(&public_url(&public_base, "images", &key));
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "filePath": key,
         "fileUrl": file_url,

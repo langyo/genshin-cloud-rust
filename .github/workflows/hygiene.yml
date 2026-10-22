@@ -53,3 +53,27 @@ jobs:
           fi
           printf 'Checking:\n%s\n' "${scripts[@]}"
           shellcheck "${scripts[@]}"
+
+  # Drift gate for the staged celestia-devtools recipes: the .just/ staging
+  # model only works while the repo's justfile stays compatible with the
+  # shared template. Non-blocking companion to actionlint/shellcheck.
+  just-drift:
+    name: justfile drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Install celestia-devtools
+        run: pip install git+https://github.com/celestia-island/celestia-devtools.git
+
+      - name: Stage and check drift
+        run: |
+          set -euo pipefail
+          just fetch
+          celestia-devtools init --check

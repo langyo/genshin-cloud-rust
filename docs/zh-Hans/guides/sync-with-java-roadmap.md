@@ -103,6 +103,29 @@ GET/POST × query/form 全兼容）；multipart（FormData 登录）与 query
 （`markerTitle/itemList/markerCreatorId/hiddenFlag/position`），对齐
 Java 对 null 的容忍，消除新前端可选字段的 422 风险。
 
+## 2026-10 第二波（遗留项落实）
+
+- **history 写路径补齐**：marker 更新/删除/tweak 与 item 更新/删除现在
+
+落 history 行（记录**变更前**状态的 camelCase DTO JSON，含 md5）；
+此前 Rust 只读不写，history 列表与 score 生成均无数据源。
+
+- **score 生成对齐 Java 算法**：相邻历史对差分（fields 按字段计次、
+
+chars 按 `markerTitle`/content 的 Levenshtein 距离）、首尾比对条目合成
+（新建点位取首个关联物品、末值取区间后首条历史或点位现状）、记账归属
+「前一条创建者 × Asia/Shanghai 日桶」。
+
+- **图片直链统一改写**：`ICON_PROXY_BASE` 现对 icon 响应、res 的
+
+`fileUrl` 与 `tag_doc` 一并生效（ddns.minemc.top 无 CORS 头）。
+
+- **`item_type` 更新请求** hiddenFlag 放宽为 serde 缺省（Java null 容忍）。
+- **WS 契约更新**：确认最新前端已迁 socket.io（见 ws-frontend-contract
+
+的 2026-10-22 更新）；迁移前本地树的 `?token=` 补丁在前端仓
+`fix/ws-token-query` 分支。
+
 ## 跟进事项
 
 - 上述差距项排入迭代 backlog（见根目录 `PLAN.md`），

@@ -270,7 +270,7 @@ fn icon_to_vo(
             .map(|dt| dt.and_utc().timestamp_millis() as f64),
         tag: it.tag.clone(),
         type_id_list: type_map.get(&it.id).cloned().unwrap_or_default(),
-        url: it.url.clone(),
+        url: super::rewrite_image_url(&it.url),
         url_variants: it.url_variants.clone(),
         description: it.description.clone(),
     }

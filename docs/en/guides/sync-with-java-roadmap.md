@@ -131,6 +131,33 @@ instead of leaking the raw entity.
 
 fields relaxed to serde defaults (Java null tolerance).
 
+## 2026-10 second wave (leftover items landed)
+
+- **History write path**: marker update/delete/tweak and item update/delete
+
+now record history rows (pre-change camelCase DTO JSON with md5); the
+Rust side previously never wrote history, leaving both the history list
+and score generation without a data source.
+
+- **Score generation aligned with the Java algorithm**: consecutive
+
+history-pair diffs (fields per changed field, chars via Levenshtein
+distance over `markerTitle`/content), synthesized boundary records
+(created markers start from their first linked item; the final value is
+the first post-span history or the marker's current state), credited to
+the before-record's creator × Asia/Shanghai day bucket.
+
+- **Image URL rewriting unified**: `ICON_PROXY_BASE` now also applies to
+
+icon responses and res `fileUrl` (ddns.minemc.top has no CORS headers).
+
+- **`item_type` update request** hiddenFlag relaxed to a serde default.
+- **WS contract update**: the latest frontend confirmed the socket.io
+
+migration (see the 2026-10-22 update in ws-frontend-contract); the
+pre-migration local tree's `?token=` patch lives on the frontend repo's
+`fix/ws-token-query` branch.
+
 ## Follow-ups
 
 - Remaining gap items live in the iteration backlog (root `PLAN.md`) and
