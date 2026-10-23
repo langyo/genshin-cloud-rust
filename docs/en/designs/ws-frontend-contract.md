@@ -99,6 +99,7 @@ is now a confirmed fact; the path-1/2 decision stays open.
 does not apply to the migrated socket.io channel — it only serves the
 transition window while a raw-WS frontend build is still in use.
 
+<<<<<<< HEAD
 ## 2026-10-23 decision
 
 - **Final decision: socket.io-compatible mode (path 2)** — confirmed by the
@@ -121,3 +122,16 @@ reference. The `?token=` query convention applies only to the existing raw
 
 escape hatch stay in place; whether to remove them will be decided after the
 socket.io channel ships.
+=======
+## Decision (2026-10-23): the backend adopts Socket.IO
+
+The Rust backend now serves a Socket.IO-compatible channel via `socketioxide`
+(protocol v5 / EIO=4, works with `socket.io-client` 4.x out of the box) at
+`WS_SOCKETIO_PATH` (default `/socket.io`). Auth follows the raw-WS rules
+(`WS_AUTH_REQUIRED` / dual token channels / subject consistency); events are
+pushed as the `message` event with a **string** payload (the `W<T>` envelope
+JSON); `rttcheck` echoes timestamps per the Java semantics; the raw WS
+endpoint remains as a transition crutch. Frontend follow-up: include `token`
+in the socket.io connection query — until then run with `WS_AUTH_REQUIRED=false`.
+
+>>>>>>> ef91b0a (✨ Serve the push channel over Socket.IO via socketioxide.)

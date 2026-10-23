@@ -3,6 +3,7 @@ mod cdn;
 // observability 公开给 HTTP 层测试：不启动二进制时也能安装 Prometheus
 // recorder 并通过 oneshot 断言 /health 与 /metrics 的形状。
 pub mod observability;
+mod socketio;
 mod system;
 // `ws` 公开给 HTTP 层测试：oneshot 无法走真实 WS 升级，握手鉴权契约
 // （`ws_handshake_key`）只能在函数层直测。
@@ -145,6 +146,13 @@ const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 /// 连接**值**不逐层传递——它只在链尾由本函数一次性 `with_state(db)` 收敛
 /// 为 `Router<()>` 注入。因此各子路由函数只改返回类型、不增参数；中间层
 /// 若强行传 db 只会得到未使用变量（值在组合根才被消费）。
+/// 构建 Socket.IO 层（读 `WS_SOCKETIO_PATH`，默认 `/socket.io`）。由
+/// 组合根（main）在 `router(db)` 之后 `.layer(...)` 应用；路径与保留的
+/// 裸 WS `/ws/{userId}` 不同，二者共存互不干扰。
+pub fn socketio_layer(db: SharedDb) -> Result<socketioxide::layer::SocketIoLayer> {
+    socketio::mount(db)
+}
+
 pub async fn router(db: SharedDb) -> Result<Router> {
     // 安装 Prometheus recorder（main 已装时幂等；集成测试直接装配 router 时
     // 也要能渲染 /metrics）。
