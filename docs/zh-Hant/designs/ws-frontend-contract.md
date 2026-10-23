@@ -78,29 +78,24 @@ socket.io-client 換成原生 `WebSocket` + 本文的 token 約定是受控改�
 
 拼接 `?token=`）——僅服務仍執行裸 WS 版本前端的過渡視窗。
 
-<<<<<<< HEAD
 ## 2026-10-23 決策
 
 - **最終決策：socket.io 相容模式（路徑 2）**——維護者已確認：Rust 後端補
-
 socket.io 相容端點（含握手鑑權），前端保持 socket.io-client，不再遷移裸 WS。
-本節取代上文「建議」（推薦路徑 1）與 2026-10-22 更新中「取捨仍開放」的表述，
-實現進度以後端倉庫的 socket.io 推送通道 PR 為準。
+本節取代上文「建議」（推薦路徑 1）與 2026-10-22 更新中「取捨仍開放」的表述。
 
 - 已按路徑 1 準備的前端遷移（`map_register_v3` PR #168，裸 WS + `?token=` +
-
 Ping/Pong，含 15 個單測）已撤回關閉，程式碼保留在 fork 分支
-`feat/raw-ws-client` 備查；`?token=` 查詢參數約定僅適用於現存裸 `/ws` 端點。
+`feat/raw-ws-client` 備查。
 
-- 現存裸 `GET /ws/{userId}` 端點與 `WS_AUTH_REQUIRED` 逃生閥暫保留，待
+## 2026-10-23 實現落地（#155）
 
-socket.io 通道落地後再決定去留。
-=======
-## 決策（2026-10-23）：後端採納 Socket.IO
+- Rust 後端經 `socketioxide`（協議 v5 / EIO=4，開箱支援 `socket.io-client`
+4.x）於 `WS_SOCKETIO_PATH`（默認 `/socket.io`）提供 Socket.IO 相容通道：
+鑑權與裸 WS 同規則（`WS_AUTH_REQUIRED` / token 雙通道 / 主體一致性）；事件
+以 `message` 事件、字符串載荷（`W<T>` 信封 JSON）推送；`rttcheck` 按 Java
+語義回顯時間戳；裸 WS `/ws/{userId}` 保留作過渡。
 
-Rust 後端經 `socketioxide`（協議 v5 / EIO=4）於 `WS_SOCKETIO_PATH`（默認
- `/socket.io`）提供 Socket.IO 兼容通道：鑑權與裸 WS 同規則；事件以 `message`
-事件、字符串載荷推送；`rttcheck` 按 Java 語義回顯時間戳；裸 WS 保留作過渡。
-前端跟進：socket.io 連線 query 附帶 `token`，未附帶期間需 `WS_AUTH_REQUIRED=false`。
-
->>>>>>> ef91b0a (✨ Serve the push channel over Socket.IO via socketioxide.)
+- 前端跟進（一行）：socket.io 連線 query 附帶 `token`；未附帶期間部署側可
+設 `WS_AUTH_REQUIRED=false`（Java 網關 pass-filter 等價）。裸 `/ws` 端點與
+`WS_AUTH_REQUIRED` 逃生閥在新通道穩定後再決定去留。
