@@ -81,6 +81,7 @@ socket.io-client 换成原生 `WebSocket` + 本文的 token 约定是受控改�
 `getURL` 拼接 `?token=`）——该补丁对迁移后的 socket.io 通道无效，
 仅服务仍运行裸 WS 版本前端的过渡窗口。
 
+<<<<<<< HEAD
 ## 2026-10-23 决策
 
 - **最终决策：socket.io 兼容模式（路径 2）**——维护者已确认：Rust 后端补
@@ -97,3 +98,15 @@ Ping/Pong，含 15 个单测）已撤回关闭，代码保留在 fork 分支
 - 现存裸 `GET /ws/{userId}` 端点与 `WS_AUTH_REQUIRED` 逃生阀暂保留，待
 
 socket.io 通道落地后再决定去留。
+=======
+## 决策（2026-10-23）：后端采纳 Socket.IO
+
+按评估结论，Rust 后端经 `socketioxide`（协议 v5 / EIO=4，开箱支持
+`socket.io-client` 4.x）在 `WS_SOCKETIO_PATH`（默认 `/socket.io`）提供
+Socket.IO 兼容通道：鉴权与裸 WS 同规则（`WS_AUTH_REQUIRED` / token 双通道 /
+主体一致性）；事件以 `message` 事件、字符串载荷（`W<T>` 信封 JSON）推送；
+`rttcheck` 按 Java 语义回显时间戳；裸 WS `/ws/{userId}` 保留作过渡。
+前端跟进（一行）：socket.io 连接 query 附带 `token`；未附带期间需设置
+`WS_AUTH_REQUIRED=false`（Java 网关 pass-filter 等价）。
+
+>>>>>>> ef91b0a (✨ Serve the push channel over Socket.IO via socketioxide.)

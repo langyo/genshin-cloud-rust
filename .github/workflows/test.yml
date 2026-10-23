@@ -202,7 +202,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install python deps
-        run: pip install "websockets>=14" psycopg2-binary
+        run: pip install "websockets>=14" "python-socketio>=5" psycopg2-binary
 
       - name: Build server (debug)
         run: cargo build -p _router --bin _router
