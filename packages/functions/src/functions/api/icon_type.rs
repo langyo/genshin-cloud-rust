@@ -189,10 +189,10 @@ pub async fn do_delete(
                 .await?
             {
                 let mut am: itl_model::ActiveModel = l.into();
-                am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                itl_model::Entity::update_safety(am)?.exec(pg).await?;
+                // 必须走 delete_safety（update_safety 固定 del_flag=NotSet）
+                itl_model::Entity::delete_safety(am)?.exec(pg).await?;
             }
             // 类型本体
             for t in icon_type_model::Entity::find_safety()

@@ -222,10 +222,11 @@ async fn update_one(
         .await?;
     for link in old_links {
         let mut lam: link_model::ActiveModel = link.into();
-        lam.del_flag = Set(true);
         // 审计字段：软删也是修改，设置 update 组
         lam.updater_id = Set(Some(operator_id));
-        link_model::Entity::update_safety(lam)?.exec(&txn).await?;
+        // 必须走 delete_safety：update_safety 固定 del_flag=NotSet，用它做软删
+        // 等于 no-op（旧关联永远不会被清掉）。
+        link_model::Entity::delete_safety(lam)?.exec(&txn).await?;
     }
     for t in &p.type_id_list {
         let now = chrono::Utc::now().naive_utc();

@@ -12,6 +12,13 @@ pub trait SafeEntityTrait: ::sea_orm::EntityTrait {
     /// sea-orm 2.0 returns a `ValidatedUpdateOne` (the primary-key check is
     /// eager), so the safety helpers return `Result<ValidatedUpdateOne, _>`.
     /// Callers must `?` the result before `.exec().await`.
+    ///
+    /// **`del_flag` is deliberately `NotSet` in the generated UPDATE** (see the
+    /// macro impl): callers routinely build a full-row ActiveModel from a DB
+    /// model, and writing that row back must never resurrect a soft-deleted
+    /// record as a side effect. Soft delete and restore therefore have their
+    /// own helpers — never encode `del_flag` into the model handed to
+    /// `update_safety` and expect it to take effect.
     fn update_safety(
         model: <Self as SafeEntityTrait>::ActiveModel,
     ) -> std::result::Result<
@@ -22,6 +29,21 @@ pub trait SafeEntityTrait: ::sea_orm::EntityTrait {
         Self: Sized;
 
     fn delete_safety(
+        model: <Self as SafeEntityTrait>::ActiveModel,
+    ) -> std::result::Result<
+        ::sea_orm::ValidatedUpdateOne<<Self as SafeEntityTrait>::ActiveModel>,
+        ::sea_orm::DbErr,
+    >
+    where
+        Self: Sized;
+
+    /// Flip `del_flag` back to `false` (the inverse of `delete_safety`).
+    ///
+    /// No version filter: like `delete_safety`, this is a `del_flag`
+    /// transition, not a business-field edit, so it must succeed on the
+    /// current row state (a soft-deleted row may have been updated by the
+    /// delete itself).
+    fn restore_safety(
         model: <Self as SafeEntityTrait>::ActiveModel,
     ) -> std::result::Result<
         ::sea_orm::ValidatedUpdateOne<<Self as SafeEntityTrait>::ActiveModel>,
@@ -128,6 +150,18 @@ macro_rules! impl_safe_operation {
             ) -> std::result::Result<::sea_orm::ValidatedUpdateOne<ActiveModel>, ::sea_orm::DbErr> {
                 Self::update(ActiveModel {
                     del_flag: ::sea_orm::ActiveValue::Set(true),
+                    ..model
+                })
+                .validate()
+            }
+
+            fn restore_safety(
+                model: ActiveModel,
+            ) -> std::result::Result<::sea_orm::ValidatedUpdateOne<ActiveModel>, ::sea_orm::DbErr> {
+                // 与 delete_safety 对称：显式 Set 覆盖调用方 ActiveModel 里的
+                // del_flag 值；无 version filter（del_flag 迁移不是业务字段编辑）。
+                Self::update(ActiveModel {
+                    del_flag: ::sea_orm::ActiveValue::Set(false),
                     ..model
                 })
                 .validate()

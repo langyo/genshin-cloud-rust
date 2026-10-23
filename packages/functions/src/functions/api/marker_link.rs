@@ -364,10 +364,10 @@ pub async fn do_link(
         if pl.del {
             if let Some(m) = pl.existing {
                 let mut am: linkage_model::ActiveModel = m.into();
-                am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                linkage_model::Entity::update_safety(am)?.exec(pg).await?;
+                // 必须走 delete_safety（update_safety 固定 del_flag=NotSet）
+                linkage_model::Entity::delete_safety(am)?.exec(pg).await?;
             }
             continue;
         }
@@ -382,8 +382,9 @@ pub async fn do_link(
             am.link_action = Set(action);
             am.link_reverse = Set(pl.link_reverse);
             am.path = Set(pl.path);
-            am.del_flag = Set(false);
-            linkage_model::Entity::update_safety(am)?.exec(pg).await?;
+            // 复活已软删的关联行：update_safety 固定 del_flag=NotSet（防误复活），
+            // 必须显式走 restore_safety 才能把 del_flag 置回 false。
+            linkage_model::Entity::restore_safety(am)?.exec(pg).await?;
         } else {
             let now = chrono::Utc::now().naive_utc();
             let active = linkage_model::ActiveModel {
