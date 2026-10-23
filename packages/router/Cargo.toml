@@ -42,6 +42,8 @@ env_logger = { workspace = true }
 jsonwebtoken = { workspace = true }
 log = { workspace = true }
 md5 = { workspace = true }
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
 minio = { workspace = true }
 once_cell = { workspace = true }
 # redis / minio：routes::internal_error 沿错误链 downcast 内部错误类型

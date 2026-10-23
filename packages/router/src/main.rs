@@ -142,6 +142,9 @@ async fn main() -> Result<()> {
     }
     builder.init();
 
+    // 启动即安装 Prometheus recorder（router() 内也有幂等调用，测试路径用）。
+    _router::routes::observability::init_metrics();
+
     // Fail fast on a missing JWT secret. The lazy JWT key statics would
     // otherwise panic on the first authenticated request — and with
     // `panic = "abort"` in the release profile that kills the whole process

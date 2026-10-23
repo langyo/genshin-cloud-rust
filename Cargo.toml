@@ -60,6 +60,12 @@ flate2 = "^1"
 jsonwebtoken = { version = "^10", default-features = false, features = ["rust_crypto", "use_pem"] }
 log = "^0.4"
 md5 = "^0.8"
+# metrics: facade for the HTTP request counter / latency histogram rendered at
+# GET /metrics. The exporter pins default-features = false because its default
+# "push-gateway" feature pulls hyper-rustls/aws-lc-rs, which would drag the
+# aws-lc crypto provider into the workspace and overrule its ring-only policy.
+metrics = "^0.24"
+metrics-exporter-prometheus = { version = "^0.18", default-features = false }
 minio = "^0.4"
 # moka: in-process cache for the BinaryMD5 archive export (Java uses Caffeine).
 moka = { version = "^0.12", features = ["future"] }
