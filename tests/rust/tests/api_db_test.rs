@@ -330,6 +330,7 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(itl_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
         ddl_without_foreign_keys(mil_model::Entity),
+        ddl_without_foreign_keys(linkage_model::Entity),
         ddl_without_foreign_keys(tag_model::Entity),
         ddl_without_foreign_keys(tag_type_model::Entity),
     ];
@@ -349,6 +350,7 @@ async fn area_and_item_doc_business_assertions() {
             "icon_type_link",
             "marker",
             "marker_item_link",
+            "marker_linkage",
             "marker_punctuate",
             "tag",
             "tag_type",

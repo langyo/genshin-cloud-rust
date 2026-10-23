@@ -105,8 +105,8 @@ def main() -> int:
         cur.execute(
             f'INSERT INTO "{schema}"."area" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
-            f"name, code, content, icon_tag, parent_id, is_final, hidden_flag, sort_index, special_flag) "
-            f"VALUES (0, {aid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, '0', {parent}, {str(final).lower()}, 0, {aid}, 0)",
+            f"name, code, content, icon_id, parent_id, is_final, hidden_flag, sort_index, special_flag) "
+            f"VALUES (0, {aid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, 0, {parent}, {str(final).lower()}, 0, {aid}, 0)",
             (name, code),
         )
 
@@ -124,8 +124,9 @@ def main() -> int:
     for iid, name, url in icons:
         cur.execute(
             f'INSERT INTO "{schema}"."icon" '
-            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, name, url) "
-            f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, %s)",
+            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
+            f"tag, description, url, url_variants) "
+            f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, '', %s, NULL)",
             (name, url),
         )
 
@@ -141,9 +142,9 @@ def main() -> int:
         cur.execute(
             f'INSERT INTO "{schema}"."item_type" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
-            f"icon_tag, name, content, parent_id, is_final, hidden_flag, sort_index) "
-            f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, {tid}, true, 0, {sort})",
-            (icon_tag, name),
+            f"icon_id, name, content, parent_id, is_final, hidden_flag, sort_index) "
+            f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, 0, %s, NULL, {tid}, true, 0, {sort})",
+            (name,),
         )
 
     # ── Items (area_id points at a child area, e.g. 蒙德城) ────────────────
@@ -161,9 +162,9 @@ def main() -> int:
             f'INSERT INTO "{schema}"."item" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"name, area_id, default_refresh_time, default_content, default_count, "
-            f"icon_tag, icon_style_type, hidden_flag, sort_index, special_flag) "
-            f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, {area_id}, 0, NULL, 1, %s, 0, 0, {sort}, NULL)",
-            (name, icon_tag),
+            f"icon_id, icon_style_type, hidden_flag, sort_index, special_flag) "
+            f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, {area_id}, 0, NULL, 1, 0, 0, 0, {sort}, NULL)",
+            (name,),
         )
         cur.execute(
             f'INSERT INTO "{schema}"."item_type_link" '

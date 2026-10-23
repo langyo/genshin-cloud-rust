@@ -26,6 +26,16 @@ set lists
 set allow-duplicate-recipes
 set allow-duplicate-variables
 
+# Fallback definitions so this justfile parses on a fresh clone where the
+# staged .just/ recipes are absent (the import below is optional). The staged
+# template overrides these; both spellings resolve identically.
+python_cmd := if os_family() == "windows" {
+    if which("python") != "" { "python" } else { "python3" }
+} else {
+    if which("python3") != "" { "python3" } else { "python" }
+}
+_devtools := if which("celestia-devtools") != "" { "celestia-devtools" } else { python_cmd + " -m celestia_devtools" }
+
 # Shared celestia-devtools recipes — NOT in git. Stage with: just fetch.
 # `import?` silently skips when absent, so this justfile parses pre-fetch.
 import? "./.just/celestia-devtools.just"
