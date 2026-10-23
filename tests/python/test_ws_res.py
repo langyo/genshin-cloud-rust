@@ -149,49 +149,57 @@ png = (
     + _st.pack(">I", 13) + b"IHDR" + _ihdr + _st.pack(">I", _crc(b"IHDR" + _ihdr) & 0xFFFFFFFF)
     + _st.pack(">I", 0) + b"IEND" + _st.pack(">I", _crc(b"IEND") & 0xFFFFFFFF)
 )
+# MinIO 可用性探测：后端未配置/不可达 MinIO 时（如 CI 不挂 MinIO 服务），
+# res 上传断言整体自跳过——WS 断言不依赖 MinIO，仍照常执行。
+st, pr = call("GET", "/api/res/get?filePath=minio_probe_regress.png", token=punctuate)
+MINIO_READY = not (isinstance(pr, dict) and pr.get("error") and "minio" in str(pr.get("message", "")).lower())
+if not MINIO_READY:
+    print("  skip: MinIO 未配置（res 上传/去重断言自跳过）")
 # 对象键 = 客户端 filePath（Java uploadImage 契约）。每次运行用唯一路径，
 # 否则上一轮落盘的同路径对象会按「当前文件已存在」契约拒绝本次上传。
 upload_path = f"regression/ws_test_{_uuid.uuid4().hex[:8]}.png"
-body, ct = file_form(upload_path, "ws_test.png", png, "image/png")
-req = urllib.request.Request(BASE + "/api/res/upload/image", data=body, method="PUT",
-                             headers={"Content-Type": ct, "User-Agent": UA,
-                                      "Authorization": f"Bearer {punctuate}"})
-try:
-    with urllib.request.urlopen(req, timeout=30) as r:
-        up = json.loads(r.read().decode())
-    check("res upload 200", r.status == 200 and not up.get("error"), str(up)[:150])
-    data = up.get("data") or {}
-    if isinstance(data, list) and data:
-        data = data[0]
-    check("upload returns fileUrl", bool(data.get("fileUrl") or data.get("url")), str(data)[:200])
-    check("upload filePath echoes the client key", data.get("filePath") == upload_path, str(data)[:200])
-except urllib.error.HTTPError as e:
-    check("res upload 200", False, f"{e.code} {e.read().decode()[:200]}")
-except Exception as e:
-    check("res upload 200", False, str(e)[:200])
+if MINIO_READY:
+    body, ct = file_form(upload_path, "ws_test.png", png, "image/png")
+    req = urllib.request.Request(BASE + "/api/res/upload/image", data=body, method="PUT",
+                                 headers={"Content-Type": ct, "User-Agent": UA,
+                                          "Authorization": f"Bearer {punctuate}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            up = json.loads(r.read().decode())
+        check("res upload 200", r.status == 200 and not up.get("error"), str(up)[:150])
+        data = up.get("data") or {}
+        if isinstance(data, list) and data:
+            data = data[0]
+        check("upload returns fileUrl", bool(data.get("fileUrl") or data.get("url")), str(data)[:200])
+        check("upload filePath echoes the client key", data.get("filePath") == upload_path, str(data)[:200])
+    except urllib.error.HTTPError as e:
+        check("res upload 200", False, f"{e.code} {e.read().decode()[:200]}")
+    except Exception as e:
+        check("res upload 200", False, str(e)[:200])
 
-# ── res/get 去重链路（Java getResource 契约；前端 getOrUploadImage 第一跳）──
-st, pr = call("GET", f"/api/res/get?filePath={upload_path}", token=punctuate)
-check("res/get hit returns fileUrl",
-      st == 200 and isinstance(pr, dict) and not pr.get("error")
-      and (pr.get("data") or {}).get("fileUrl"),
-      f"st={st} {str(pr)[:200]}")
-st, pr = call("GET", "/api/res/get?filePath=regression/never_uploaded_regress.png", token=punctuate)
-check("res/get miss returns empty object",
-      st == 200 and isinstance(pr, dict) and not pr.get("error") and not (pr.get("data") or {}).get("fileUrl"),
-      f"st={st} {str(pr)[:200]}")
+    # ── res/get 去重链路（Java getResource 契约；前端 getOrUploadImage 第一跳）──
+    st, pr = call("GET", f"/api/res/get?filePath={upload_path}", token=punctuate)
+    check("res/get hit returns fileUrl",
+          st == 200 and isinstance(pr, dict) and not pr.get("error")
+          and (pr.get("data") or {}).get("fileUrl"),
+          f"st={st} {str(pr)[:200]}")
+    st, pr = call("GET", "/api/res/get?filePath=regression/never_uploaded_regress.png", token=punctuate)
+    check("res/get miss returns empty object",
+          st == 200 and isinstance(pr, dict) and not pr.get("error") and not (pr.get("data") or {}).get("fileUrl"),
+          f"st={st} {str(pr)[:200]}")
 
-# 同路径重复上传 → Java「当前文件已存在，请更换文件路径」
-body, ct = file_form(upload_path, "ws_test.png", png, "image/png")
-req = urllib.request.Request(BASE + "/api/res/upload/image", data=body, method="PUT",
-                             headers={"Content-Type": ct, "User-Agent": UA,
-                                      "Authorization": f"Bearer {punctuate}"})
-try:
-    with urllib.request.urlopen(req, timeout=30) as r:
-        dup = json.loads(r.read().decode())
-    check("duplicate path upload rejected in R", dup.get("error") is True, str(dup)[:150])
-except urllib.error.HTTPError as e:
-    check("duplicate path upload rejected in R", 400 <= e.code < 500, f"{e.code}")
+    # 同路径重复上传 → Java「当前文件已存在，请更换文件路径」
+    body, ct = file_form(upload_path, "ws_test.png", png, "image/png")
+    req = urllib.request.Request(BASE + "/api/res/upload/image", data=body, method="PUT",
+                                 headers={"Content-Type": ct, "User-Agent": UA,
+                                          "Authorization": f"Bearer {punctuate}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            dup = json.loads(r.read().decode())
+        check("duplicate path upload rejected in R", dup.get("error") is True, str(dup)[:150])
+    except urllib.error.HTTPError as e:
+        check("duplicate path upload rejected in R", 400 <= e.code < 500, f"{e.code}")
+
 
 # non-image rejected
 body, ct = file_form("regression/ws_test.txt", "ws_test.txt", b"not an image", "text/plain")

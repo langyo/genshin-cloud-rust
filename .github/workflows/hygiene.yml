@@ -69,6 +69,11 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
       - name: Install celestia-devtools
         run: pip install git+https://github.com/celestia-island/celestia-devtools.git
 
