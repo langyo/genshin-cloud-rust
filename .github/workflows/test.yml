@@ -128,7 +128,7 @@ jobs:
           key: ubuntu-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Run DB-backed tests
-        run: cargo test -p genshin-cloud-tests --test user_db --test api_db --test res_db --test redis_cache_db --no-fail-fast
+        run: cargo test -p genshin-cloud-tests --test user_db --test api_db --test res_db --test redis_cache_db --test write_integrity_db --no-fail-fast
 
   # Live-API python regression (tests/python): provisions Postgres + Redis +
   # MinIO-free, runs the migrations, seeds the regress_* accounts over HTTP (the
