@@ -111,11 +111,12 @@ cargo patch，跑 cargo 会把 `[[patch.unused]]` 版本噪音写进 lock——�
 注册进 `Migrator`）。存量库升级前可先跑
 `cargo run --bin init_db -- --check` 做漂移检测。
 
-1. **WS 前端契约收敛**：决策文档见
+1. **WS 前端契约收敛**：已于 2026-10-23 定案——采用 socket.io 兼容模式
 
-`docs/{en,zh-Hans,zh-Hant}/designs/ws-frontend-contract.md`——现存前端
-均不消费裸 `/ws` 端点（管理端 socket.io、地图端无 WS），协议选择权在
-前端维护者。
+（路径 2：后端补 socket.io 端点、前端保持 socket.io-client），决策记录见
+`docs/{en,zh-Hans,zh-Hant}/designs/ws-frontend-contract.md` 文末
+「2026-10-23 决策」节。现存前端均不消费裸 `/ws` 端点，该端点与
+`WS_AUTH_REQUIRED` 逃生阀暂保留，待 socket.io 通道落地后再议去留。
 
 1. **本文件的维护纪律**：完成的事项随下次例行清理 PR 移出本文件，只增
 
