@@ -208,6 +208,12 @@ jobs:
         run: cargo build -p _router --bin _router
 
       - name: Run migrations
+        # 以回归口令播种 admin 账号（init_db 的 INIT_ADMIN_*）：
+        # 邀请码通道明确拒绝授予 admin 角色（安全加固），因此管理员账号
+        # 必须由初始化入口创建，seed_accounts.py 再补其余五角色。
+        env:
+          INIT_ADMIN_USERNAME: regress_admin
+          INIT_ADMIN_PASSWORD: ${{ env.REGRESSION_PASSWORD }}
         run: cargo run --bin init_db
 
       - name: Seed demo data

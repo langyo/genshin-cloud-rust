@@ -10,7 +10,8 @@ pub struct IconBaseRequest {
     /// serde alias 兼容历史调用方）。
     #[serde(alias = "name")]
     pub tag: String,
-    /// 图标 URL
+    /// 图标 URL（Java `IconVo.url` 可缺省；缺省落空串，避免 422）
+    #[serde(default)]
     pub url: String,
     /// 图标分类 ID 列表（Java IconDto.typeIdList / 前端契约）：写入
     /// icon_type_link；此前 Rust 侧缺失该字段，前端归类被静默丢弃。

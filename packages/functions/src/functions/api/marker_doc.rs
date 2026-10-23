@@ -664,10 +664,13 @@ fn visible_markers_full_query(allowed: &[i32]) -> sea_orm::Select<marker_model::
         .filter(mil_model::Column::DelFlag.eq(false))
         .filter(item_model::Column::DelFlag.eq(false))
         .filter(item_model::Column::HiddenFlag.is_in(allowed.to_vec()))
-        .distinct()
+        // 全列去重只能用 DISTINCT ON (id)：marker.extra 是 json 列，PG 的
+        // 普通 DISTINCT 需要整行等值算子，对 json 直接报错
+        // （"could not identify an equality operator for type json"）。
+        // 一点位多链的重复行按 id 去重，排序仍按 id 稳定。
+        .distinct_on([marker_model::Column::Id])
         .order_by_asc(marker_model::Column::Id)
 }
-
 /// GZIP 压缩（Java `CompressUtils.compress`；前端 `Zip.decompress` 解包）。
 fn gzip(bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
     use std::io::Write;

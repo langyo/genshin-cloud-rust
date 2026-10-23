@@ -261,13 +261,27 @@ def main() -> int:
         )
         marker_id += 1
 
-    cur.execute('SELECT count(*) FROM "{schema}"."marker"')
+    # ── 显式 id 插入后推进各表序列 ──────────────────────────────────────
+    # 演示数据用固定 id（1..N）以便前端稳定引用；若不 setval，后续 API
+    # 自增插入会从 1 重新开始，撞 area_pkey / item_type_pkey 等唯一约束。
+    for table in (
+        "area", "icon", "item_type", "item", "item_type_link",
+        "notice", "tag_type", "tag", "tag_type_link",
+        "marker", "marker_item_link",
+    ):
+        cur.execute(
+            f'SELECT setval(pg_get_serial_sequence(%s, \'id\'), '
+            f'COALESCE((SELECT MAX(id) FROM "{schema}"."{table}"), 1))',
+            (f'"{schema}"."{table}"',),
+        )
+
+    cur.execute(f'SELECT count(*) FROM "{schema}"."marker"')
     marker_count = cur.fetchone()[0]
-    cur.execute('SELECT count(*) FROM "{schema}"."item"')
+    cur.execute(f'SELECT count(*) FROM "{schema}"."item"')
     item_count = cur.fetchone()[0]
-    cur.execute('SELECT count(*) FROM "{schema}"."area"')
+    cur.execute(f'SELECT count(*) FROM "{schema}"."area"')
     area_count = cur.fetchone()[0]
-    cur.execute('SELECT count(*) FROM "{schema}"."item_type"')
+    cur.execute(f'SELECT count(*) FROM "{schema}"."item_type"')
     type_count = cur.fetchone()[0]
 
     conn.close()

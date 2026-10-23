@@ -71,18 +71,24 @@ async def ws_run():
 
         # setup: own area/item/marker -> MarkerAdded event
         st, pr = call("PUT", "/api/area/add", token=manager, body={
-            "name": "regress_ws_area", "parentId": -1, "isFinal": True, "iconId": 0, "hiddenFlag": 0})
-        area = pr["data"]
+            "name": "regress_ws_area",
+    "code": "REGRESS_WS_A", "parentId": -1, "isFinal": True, "iconId": 0, "hiddenFlag": 0})
+        area = pr.get("data") if isinstance(pr, dict) else None
         st, pr = call("PUT", "/api/item/add", token=manager, body={
             "areaId": area, "name": "regress_ws_item", "typeIdList": [], "iconId": 0,
             "iconStyleType": 0, "hiddenFlag": 0})
-        item = pr["data"]
+        item = pr.get("data") if isinstance(pr, dict) else None
         st, pr = call("PUT", "/api/marker/single", token=punctuate, body={
             "content": "ws", "extra": None, "hiddenFlag": 0,
             "itemList": [{"itemId": item, "count": 1}], "markerCreatorId": PUNC_ID,
             "markerTitle": "regress_ws_m", "picture": None, "pictureCreatorId": None,
             "position": "1.0,1.0", "refreshTime": 0, "videoPath": None})
         mid = pr["data"]["id"] if isinstance(pr.get("data"), dict) else pr["data"]
+
+        # 缓存失效广播：DELETE /api/cache/marker 走**非节流**的 ws_broadcast（事件
+        # 名 MarkerBinaryPurged）——debounce 版本对 30s 内的重复事件只发首条，
+        # 跨套件运行时可能已被前一套件抢占窗口，改用确定性通道断言。
+        call("DELETE", "/api/cache/marker", token=admin)
 
         # notice write -> NoticeAdded (admin)
         st, pr = call("PUT", "/api/notice/add", token=admin, body={

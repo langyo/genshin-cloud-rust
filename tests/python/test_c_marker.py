@@ -32,7 +32,8 @@ MARKERS = []
 
 section("C setup: regression area + item")
 st, pr = call("PUT", "/api/area/add", token=manager, body={
-    "name": "regress_marker_area", "parentId": -1, "isFinal": True, "iconId": 0, "hiddenFlag": 0})
+    "name": "regress_marker_area",
+    "code": "REGRESS_MARK", "parentId": -1, "isFinal": True, "iconId": 0, "hiddenFlag": 0})
 check("area created", st == 200 and isinstance(pr.get("data"), int), str(pr)[:120])
 AREA = pr.get("data")
 st, pr = call("PUT", "/api/item/add", token=manager, body={
@@ -41,7 +42,7 @@ st, pr = call("PUT", "/api/item/add", token=manager, body={
 check("item created", st == 200 and isinstance(pr.get("data"), int), str(pr)[:120])
 ITEM = pr.get("data")
 
-def mk_marker(title, hidden_flag, extra=None):
+def mk_marker(title, hidden_flag, extra=None, token=None):
     body = {
         "content": f"rc {title}", "extra": extra, "hiddenFlag": hidden_flag,
         "itemList": [{"itemId": ITEM, "count": 2}],
@@ -49,7 +50,7 @@ def mk_marker(title, hidden_flag, extra=None):
         "pictureCreatorId": None, "position": "123.45,678.90", "refreshTime": 1000,
         "videoPath": None,
     }
-    st, pr = call("PUT", "/api/marker/single", token=punctuate, body=body)
+    st, pr = call("PUT", "/api/marker/single", token=token or punctuate, body=body)
     if st == 200 and isinstance(pr, dict) and not pr.get("error"):
         mid = pr["data"]["id"] if isinstance(pr.get("data"), dict) else pr.get("data")
         MARKERS.append(mid)
@@ -61,7 +62,7 @@ section("C-2 PUT /marker/single (create)")
 m_normal = mk_marker("regress_m_normal", 0)
 check("marker created", isinstance(m_normal, int))
 m_hidden = mk_marker("regress_m_hidden", 1)
-m_beta = mk_marker("regress_m_beta", 2)
+m_beta = mk_marker("regress_m_beta", 2, token=admin)
 m_easter = mk_marker("regress_m_easter", 3)
 check("all flag variants created", all(isinstance(x, int) for x in [m_normal, m_hidden, m_beta, m_easter]))
 
@@ -70,16 +71,18 @@ st, pr = call("POST", "/api/marker/get/id", token=admin, body={"areaIdList": [AR
 ids_admin = set(pr.get("data") or []) if isinstance(pr, dict) else set()
 check("admin sees all 4 markers", ids_admin == set(MARKERS), f"{ids_admin}")
 
-st, pr = call("POST", "/api/marker/get/id", token=user_t, body={"areaIdList": [AREA]})
-ids_user = set(pr.get("data") or []) if isinstance(pr, dict) else set()
+# 可见性断言走 list_byinfo（载入阶段按 marker.hiddenFlag 过滤）；get/id 按
+# Java searchMarkerId 语义只做物品侧过滤，不做点位可见性过滤。
+st, pr = call("POST", "/api/marker/get/list_byinfo", token=user_t, body={"areaIdList": [AREA]})
+ids_user = {v.get("id") for v in (pr.get("data") or [])} if isinstance(pr, dict) else set()
 check("MAP_USER sees only flag 0/3 (no hidden/beta)", ids_user == {m_normal, m_easter}, f"{ids_user}")
 
 st, pr = call("POST", "/api/marker/get/id", token=beta, body={"areaIdList": [AREA]})
 ids_beta = set(pr.get("data") or []) if isinstance(pr, dict) else set()
 check("MAP_BETA sees 0/1/2/3", ids_beta == set(MARKERS), f"{ids_beta}")
 
-st, pr = call("POST", "/api/marker/get/id", token=punctuate, body={"areaIdList": [AREA]})
-ids_punc = set(pr.get("data") or []) if isinstance(pr, dict) else set()
+st, pr = call("POST", "/api/marker/get/list_byinfo", token=punctuate, body={"areaIdList": [AREA]})
+ids_punc = {v.get("id") for v in (pr.get("data") or [])} if isinstance(pr, dict) else set()
 check("MAP_PUNCTUATE sees 0/1/3 (no beta)", ids_punc == {m_normal, m_hidden, m_easter}, f"{ids_punc}")
 
 # empty-condition query
@@ -238,7 +241,8 @@ def _list_marker_ids(token):
 
 st, hdrs, raw, parsed = _list_marker_ids(admin)
 check("list_markers 200 octet-stream", st == 200 and isinstance(raw, (bytes, bytearray)), f"st={st}")
-check("list_markers content-type octet-stream", "octet-stream" in (hdrs.get("Content-Type") or ""), str(hdrs.get("Content-Type")))
+ct_hdr = next((v for k, v in (hdrs or {}).items() if k.lower() == "content-type"), "") or ""
+check("list_markers content-type octet-stream", "octet-stream" in ct_hdr, str(ct_hdr))
 check("list_markers is gzip", isinstance(raw, (bytes, bytearray)) and raw[:2] == b"\x1f\x8b", str(raw[:4]))
 if isinstance(parsed, tuple):
     ids, users = parsed

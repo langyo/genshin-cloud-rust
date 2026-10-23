@@ -280,9 +280,6 @@ pub async fn do_consume(
     let db = &db.pg_conn;
 
     let now = Utc::now().naive_utc();
-    let username = username
-        .filter(|u| !u.is_empty())
-        .unwrap_or_else(|| code.clone());
     // 前端注册流程必带密码；缺省时生成随机密码（邀请人可再通过管理员改密）。
     // 随机短串（uuid 前 12 位）替代 `{code}_{timestamp}`：后者可从邀请码与
     // 时间戳推算，随机串不可推算。
@@ -321,6 +318,15 @@ pub async fn do_consume(
         return Err(DomainError::Business("Invitation code already consumed".into()).into());
     }
 
+    // 用户名解析顺序：请求体 → 邀请记录上的 username → 邀请码本身。
+    // Java 语义：邀请码是「给某个用户预留的入场券」，用户名来自邀请记录；
+    // 此前无条件回退 code 会让真实注册流程把用户名写成邀请码（前端只传
+    // code/password/nickname 时尤其明显）。
+    let username = username
+        .filter(|u| !u.is_empty())
+        .or_else(|| Some(inv.username.clone()).filter(|u| !u.is_empty()))
+        .unwrap_or_else(|| code.clone());
+
     // 用户已存在：不重复创建，返回 EXISTING 供前端直接走登录（回滚抢占，
     // 保留邀请码不被消耗）
     if let Some(user) = sys_user_model::Entity::find_safety()
@@ -338,12 +344,12 @@ pub async fn do_consume(
     let user_am = sys_user_model::ActiveModel {
         version: Set(1),
         id: NotSet,
-        // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
-        // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
+        // 审计字段：新增时 create/update 两组全部设置；自助注册/邀请码消费时尚无
+        // 操作者行（新用户 ID 插入前不存在，FK 不接受 0）——记 NULL 表示系统/匿名
         create_time: Set(now),
         update_time: Set(Some(now)),
-        creator_id: Set(Some(0)),
-        updater_id: Set(Some(0)),
+        creator_id: Set(None),
+        updater_id: Set(None),
         del_flag: Set(false),
 
         username: Set(username),

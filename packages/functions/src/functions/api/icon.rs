@@ -32,6 +32,21 @@ pub async fn do_add(
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
 
+    // Java createIcon：标签不能为空，且同标签不可重复（唯一性在业务层，
+    // 库表无唯一索引——与线上 Java 行为一致）。
+    let tag = payload.tag.trim().to_string();
+    if tag.is_empty() {
+        return Err(DomainError::Business("图标标签不能为空".into()).into());
+    }
+    if icon_model::Entity::find_safety()
+        .filter(icon_model::Column::Tag.eq(tag.clone()))
+        .one(&db.pg_conn)
+        .await?
+        .is_some()
+    {
+        return Err(DomainError::Business(format!("图标标签 [{tag}]已存在")).into());
+    }
+
     let active = icon_model::ActiveModel {
         version: Set(1),
         id: NotSet,
@@ -42,7 +57,7 @@ pub async fn do_add(
         updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
 
-        tag: Set(payload.tag),
+        tag: Set(tag),
         description: Set(payload.description.unwrap_or_default()),
         url: Set(payload.url),
         url_variants: Set(payload.url_variants),
@@ -224,13 +239,19 @@ pub async fn do_update(
         .one(&db.pg_conn)
         .await?;
     let item = item.ok_or_else(|| DomainError::Business("Icon not found".into()))?;
+    let old_url_variants = item.url_variants.clone();
     let mut am: icon_model::ActiveModel = item.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(auth.info.id));
     am.tag = Set(payload.base.tag.clone());
     am.url = Set(payload.base.url.clone());
     am.description = Set(payload.base.description.clone().unwrap_or_default());
-    am.url_variants = Set(payload.base.url_variants.clone());
+    // Java JsonUtils.merge：urlVariants 按 map 合并——新值为 null 的键删除，
+    // 其余覆盖；未提交该字段则保持原值（不是整体替换）。
+    am.url_variants = Set(merge_url_variants(
+        old_url_variants.as_ref(),
+        payload.base.url_variants.as_ref(),
+    ));
     icon_model::Entity::update_safety(am)?
         .exec(&db.pg_conn)
         .await?;
@@ -300,4 +321,27 @@ pub(crate) async fn icon_id_by_tag(
         .one(db)
         .await?;
     Ok(t.map(|t| t.icon_id))
+}
+
+/// `urlVariants` 的 Java `JsonUtils.merge` 语义：以旧 map 为底，逐键应用
+/// 新 map（null 表示删除该键）；新值非对象时整体替换。
+fn merge_url_variants(
+    old: Option<&serde_json::Value>,
+    new: Option<&serde_json::Value>,
+) -> Option<serde_json::Value> {
+    match new {
+        None => old.cloned(),
+        Some(serde_json::Value::Object(new_map)) => {
+            let mut merged = old.and_then(|v| v.as_object().cloned()).unwrap_or_default();
+            for (k, v) in new_map {
+                if v.is_null() {
+                    merged.remove(k);
+                } else {
+                    merged.insert(k.clone(), v.clone());
+                }
+            }
+            Some(serde_json::Value::Object(merged))
+        },
+        Some(other) => Some(other.clone()),
+    }
 }
