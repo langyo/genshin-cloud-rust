@@ -1,12 +1,12 @@
 # WebSocket Frontend Contract
 
-Status: **decision pending (frontend side)** · Last verified: 2026-09-27
+Status: **decided on 2026-10-23: socket.io-compatible mode** · Last verified: 2026-10-22
 
 This note records the contract of the Rust backend's push channel, what the
 frontend repositories actually consume today, and the options for converging
-the two. It exists so the decision can be made with the facts on the table —
-the backend side is settled and hardened; nothing in this note requests
-backend work.
+the two. It existed so the decision could be made with the facts on the
+table — the backend side was settled and hardened at the time of writing;
+as of 2026-10-23 the confirmed decision at the end of this note applies.
 
 ## What the Rust backend provides
 
@@ -98,3 +98,26 @@ is now a confirmed fact; the path-1/2 decision stays open.
 (branch `fix/ws-token-query`: `getURL` appends `?token=`). That patch
 does not apply to the migrated socket.io channel — it only serves the
 transition window while a raw-WS frontend build is still in use.
+
+## 2026-10-23 decision
+
+- **Final decision: socket.io-compatible mode (path 2)** — confirmed by the
+
+maintainer: the Rust backend adds a socket.io-compatible endpoint (including
+handshake auth) and the frontend keeps socket.io-client; the raw-WS migration
+(path 1) is dropped. This section supersedes the "Recommendation" above
+(which favored path 1) and the "stays open" wording in the 2026-10-22 update.
+Implementation tracking happens in the backend repository's socket.io push
+channel PR.
+
+- The frontend migration prepared for path 1 (`map_register_v3` PR #168: raw
+
+WS + `?token=` + Ping/Pong, with 15 unit tests) has been withdrawn and
+closed; the code remains on the fork branch `feat/raw-ws-client` for
+reference. The `?token=` query convention applies only to the existing raw
+`/ws` endpoint.
+
+- The existing raw `GET /ws/{userId}` endpoint and the `WS_AUTH_REQUIRED`
+
+escape hatch stay in place; whether to remove them will be decided after the
+socket.io channel ships.
