@@ -211,7 +211,7 @@ async fn update_one(
         .special_flag
         .map(|v| v.clamp(i32::MIN as i64, i32::MAX as i64) as i32));
 
-    item_model::Entity::update_safety(am)?.exec(db).await?;
+    item_model::Entity::update_safety_strict(am, db).await?;
 
     // 类型关联：先逻辑删除旧 link，再按新 typeIdList 插入。
     // 删除+插入包事务，失败整体回滚，避免半更新状态（物品已改、类型关联丢失）。

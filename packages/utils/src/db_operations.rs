@@ -28,6 +28,30 @@ pub trait SafeEntityTrait: ::sea_orm::EntityTrait {
     where
         Self: Sized;
 
+    /// Execute an optimistic-lock update immediately and fail when it hits
+    /// zero rows.
+    ///
+    /// `update_safety` returns `UpdateResult` and most production call sites
+    /// ignored `rows_affected`: losing the optimistic-lock race produced a
+    /// silent no-op (HTTP 200, data unchanged, client believes it saved).
+    /// This variant is the same statement, but a zero-row result becomes the
+    /// business-level conflict error the Java clients already understand.
+    ///
+    /// Only for updates where the row is expected to exist (update handlers).
+    /// Deletes-by-id stay tolerant: zero rows means "already gone", which is
+    /// the idempotent contract.
+    // 静态分发的内部 trait：调用点直接 .await，从不命名 Future 类型；Send
+    // 由 axum handler 的调用上下文自身校验。rustc 的 async_fn_in_trait 提示
+    // 针对的是「公开 trait 无法声明 Future 的 auto-trait 约束」，此处不适用。
+    #[allow(async_fn_in_trait)]
+    async fn update_safety_strict<C>(
+        model: <Self as SafeEntityTrait>::ActiveModel,
+        db: &C,
+    ) -> ::anyhow::Result<::sea_orm::UpdateResult>
+    where
+        C: ::sea_orm::ConnectionTrait + Send + Sync,
+        Self: Sized;
+
     fn delete_safety(
         model: <Self as SafeEntityTrait>::ActiveModel,
     ) -> std::result::Result<
@@ -143,6 +167,34 @@ macro_rules! impl_safe_operation {
                 })
                 .validate()
                 .map(|v| v.filter(Column::Version.eq(last_version)))
+            }
+
+            async fn update_safety_strict<C>(
+                model: ActiveModel,
+                db: &C,
+            ) -> ::anyhow::Result<::sea_orm::UpdateResult>
+            where
+                C: ::sea_orm::ConnectionTrait + Send + Sync,
+            {
+                // sea-orm 2.0 的 ValidatedUpdateOne::exec 返回更新后的 Model，
+                // 拿不到行数；exec_without_returning 才暴露 rows_affected，且在
+                // 0 行时给出 RecordNotUpdated。
+                match Self::update_safety(model)?
+                    .exec_without_returning(db)
+                    .await
+                {
+                    Ok(res) => Ok(res),
+                    // 乐观锁冲突（version 已变）或行已不存在：调用方原本
+                    // `.exec()?; Ok(true)` 静默成功，这里按 Java 业务错误契约
+                    // 返回（HTTP 200 + errorStatus 500 + 可读文案）。
+                    Err(::sea_orm::DbErr::RecordNotUpdated) => {
+                        Err(::_utils::errors::DomainError::Business(
+                            "数据已更新，请刷新后重试".into(),
+                        )
+                        .into())
+                    },
+                    Err(err) => Err(err.into()),
+                }
             }
 
             fn delete_safety(
