@@ -99,39 +99,31 @@ is now a confirmed fact; the path-1/2 decision stays open.
 does not apply to the migrated socket.io channel — it only serves the
 transition window while a raw-WS frontend build is still in use.
 
-<<<<<<< HEAD
 ## 2026-10-23 decision
 
 - **Final decision: socket.io-compatible mode (path 2)** — confirmed by the
-
 maintainer: the Rust backend adds a socket.io-compatible endpoint (including
 handshake auth) and the frontend keeps socket.io-client; the raw-WS migration
-(path 1) is dropped. This section supersedes the "Recommendation" above
-(which favored path 1) and the "stays open" wording in the 2026-10-22 update.
-Implementation tracking happens in the backend repository's socket.io push
-channel PR.
+(path 1) is dropped. This supersedes the "Recommendation" above (which
+favored path 1) and the "stays open" wording in the 2026-10-22 update.
 
 - The frontend migration prepared for path 1 (`map_register_v3` PR #168: raw
-
 WS + `?token=` + Ping/Pong, with 15 unit tests) has been withdrawn and
 closed; the code remains on the fork branch `feat/raw-ws-client` for
-reference. The `?token=` query convention applies only to the existing raw
-`/ws` endpoint.
+reference.
 
-- The existing raw `GET /ws/{userId}` endpoint and the `WS_AUTH_REQUIRED`
+## 2026-10-23 implementation landed (#155)
 
-escape hatch stay in place; whether to remove them will be decided after the
-socket.io channel ships.
-=======
-## Decision (2026-10-23): the backend adopts Socket.IO
-
-The Rust backend now serves a Socket.IO-compatible channel via `socketioxide`
+- The Rust backend serves a Socket.IO-compatible channel via `socketioxide`
 (protocol v5 / EIO=4, works with `socket.io-client` 4.x out of the box) at
 `WS_SOCKETIO_PATH` (default `/socket.io`). Auth follows the raw-WS rules
 (`WS_AUTH_REQUIRED` / dual token channels / subject consistency); events are
 pushed as the `message` event with a **string** payload (the `W<T>` envelope
 JSON); `rttcheck` echoes timestamps per the Java semantics; the raw WS
-endpoint remains as a transition crutch. Frontend follow-up: include `token`
-in the socket.io connection query — until then run with `WS_AUTH_REQUIRED=false`.
+endpoint remains as a transition crutch.
 
->>>>>>> ef91b0a (✨ Serve the push channel over Socket.IO via socketioxide.)
+- Frontend follow-up (one line): include `token` in the socket.io connection
+query — until then deployments can run with `WS_AUTH_REQUIRED=false` (the
+Java gateway pass-filter equivalent). Whether to retire the raw `/ws`
+endpoint and the escape hatch will be revisited once the new channel is
+stable.

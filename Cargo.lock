@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "_database"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "_utils",
  "anyhow",
@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "_functions"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "_database",
  "_utils",
@@ -61,7 +61,7 @@ dependencies = [
 
 [[package]]
 name = "_migration"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "_database",
  "anyhow",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "_router"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "_database",
  "_functions",
@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "_utils"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1385,9 +1385,9 @@ dependencies = [
 
 [[package]]
 name = "ctutils"
-version = "0.4.2"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e"
+checksum = "38d28fb6aa7dd680b3ffd1a3e64e115c177bdba63c0ae7f9cd48129ff05c4fa0"
 dependencies = [
  "cmov",
 ]
@@ -2045,7 +2045,7 @@ dependencies = [
 
 [[package]]
 name = "genshin-cloud-tests"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "_database",
  "_functions",
@@ -4999,7 +4999,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -5546,9 +5546,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.26.0"
+version = "1.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
+checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
